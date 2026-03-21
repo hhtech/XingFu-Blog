@@ -1,0 +1,35 @@
+{{- $pag := $.Paginator -}}
+{{- if gt $pag.TotalPages 1 -}}
+<nav class="pagination sora-pagination" role="navigation" aria-label="pagination">
+    <a
+        class="page-link page-link-arrow {{ if not $pag.Prev }}disabled{{ end }}"
+        {{- if $pag.Prev -}} href="{{ $pag.Prev.URL }}" {{- end -}}
+        aria-label="上一页"
+        {{- if not $pag.Prev -}} aria-disabled="true" {{- end -}}
+    >
+        <span class="page-link-chevron" aria-hidden="true">&lt;</span>
+    </a>
+
+    <div class="sora-pagination-pages">
+        {{- range $pag.Pagers -}}
+            <a
+                class="page-link page-link-number {{ if eq .PageNumber $pag.PageNumber }}current{{ end }}"
+                {{- if ne .PageNumber $pag.PageNumber -}} href="{{ .URL }}" {{- end -}}
+                aria-label="第 {{ .PageNumber }} 页"
+                {{- if eq .PageNumber $pag.PageNumber -}} aria-current="page" {{- end -}}
+            >
+                {{ .PageNumber }}
+            </a>
+        {{- end -}}
+    </div>
+
+    <a
+        class="page-link page-link-arrow {{ if not $pag.Next }}disabled{{ end }}"
+        {{- if $pag.Next -}} href="{{ $pag.Next.URL }}" {{- end -}}
+        aria-label="下一页"
+        {{- if not $pag.Next -}} aria-disabled="true" {{- end -}}
+    >
+        <span class="page-link-chevron" aria-hidden="true">&gt;</span>
+    </a>
+</nav>
+{{- end -}}

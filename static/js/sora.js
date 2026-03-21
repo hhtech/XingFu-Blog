@@ -10,6 +10,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const timeTips = document.getElementById("post-time-tips-span");
   const upvoteButton = document.getElementById("upvote-button");
   const upvoteNumber = document.getElementById("upvote-number");
+  const downvoteButton = document.getElementById("downvote-button");
+  const downvoteNumber = document.getElementById("downvote-number");
 
   const syncVisits = () => {
     if (!visitCount) {
@@ -29,38 +31,78 @@ document.addEventListener("DOMContentLoaded", () => {
     visitCount.textContent = String(visits);
   };
 
-  const syncUpvote = () => {
-    if (!upvoteButton || !upvoteNumber) {
+  const syncReactions = () => {
+    if (!upvoteButton || !upvoteNumber || !downvoteButton || !downvoteNumber) {
       return;
     }
 
-    const postKey = upvoteButton.dataset.postKey || window.location.pathname;
-    const votedKey = "sora:upvoted-posts";
-    const countKey = `sora:upvote-count:${postKey}`;
-    const votedPosts = new Set(JSON.parse(localStorage.getItem(votedKey) || "[]"));
-    let count = Number(localStorage.getItem(countKey) || upvoteNumber.textContent || "0");
+    const postKey = upvoteButton.dataset.postKey || downvoteButton.dataset.postKey || window.location.pathname;
+    const reactionKey = `sora:reaction:${postKey}`;
+    const upvoteCountKey = `sora:upvote-count:${postKey}`;
+    const downvoteCountKey = `sora:downvote-count:${postKey}`;
+    let reaction = localStorage.getItem(reactionKey) || "";
+    let upvoteCount = Number(localStorage.getItem(upvoteCountKey) || upvoteNumber.textContent || "0");
+    let downvoteCount = Number(localStorage.getItem(downvoteCountKey) || downvoteNumber.textContent || "0");
 
     const renderState = () => {
-      upvoteNumber.textContent = String(count);
-      const active = votedPosts.has(postKey);
-      upvoteButton.classList.toggle("active", active);
-      upvoteButton.setAttribute("aria-pressed", active ? "true" : "false");
-      upvoteButton.title = active ? "已点赞" : "点赞";
+      upvoteNumber.textContent = String(upvoteCount);
+      downvoteNumber.textContent = String(downvoteCount);
+
+      const isUpvote = reaction === "upvote";
+      const isDownvote = reaction === "downvote";
+
+      upvoteButton.classList.toggle("active", isUpvote);
+      downvoteButton.classList.toggle("active", isDownvote);
+      downvoteButton.classList.toggle("active-down", isDownvote);
+
+      upvoteButton.setAttribute("aria-pressed", isUpvote ? "true" : "false");
+      downvoteButton.setAttribute("aria-pressed", isDownvote ? "true" : "false");
+      upvoteButton.title = isUpvote ? "已点赞" : "点赞";
+      downvoteButton.title = isDownvote ? "已点踩" : "踩一踩";
+    };
+
+    const persistState = () => {
+      localStorage.setItem(upvoteCountKey, String(Math.max(0, upvoteCount)));
+      localStorage.setItem(downvoteCountKey, String(Math.max(0, downvoteCount)));
+      if (reaction) {
+        localStorage.setItem(reactionKey, reaction);
+      } else {
+        localStorage.removeItem(reactionKey);
+      }
+    };
+
+    const handleReaction = (type) => {
+      if (reaction === type) {
+        if (type === "upvote") {
+          upvoteCount = Math.max(0, upvoteCount - 1);
+        } else {
+          downvoteCount = Math.max(0, downvoteCount - 1);
+        }
+        reaction = "";
+      } else {
+        if (reaction === "upvote") {
+          upvoteCount = Math.max(0, upvoteCount - 1);
+        }
+        if (reaction === "downvote") {
+          downvoteCount = Math.max(0, downvoteCount - 1);
+        }
+
+        if (type === "upvote") {
+          upvoteCount += 1;
+        } else {
+          downvoteCount += 1;
+        }
+
+        reaction = type;
+      }
+
+      persistState();
+      renderState();
     };
 
     renderState();
-
-    upvoteButton.addEventListener("click", () => {
-      if (votedPosts.has(postKey)) {
-        return;
-      }
-
-      votedPosts.add(postKey);
-      count += 1;
-      localStorage.setItem(votedKey, JSON.stringify(Array.from(votedPosts)));
-      localStorage.setItem(countKey, String(count));
-      renderState();
-    });
+    upvoteButton.addEventListener("click", () => handleReaction("upvote"));
+    downvoteButton.addEventListener("click", () => handleReaction("downvote"));
   };
 
   if (content) {
@@ -137,7 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   syncVisits();
-  syncUpvote();
+  syncReactions();
 
   if (toTop) {
     const syncToTop = () => {

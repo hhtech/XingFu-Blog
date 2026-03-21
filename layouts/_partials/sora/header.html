@@ -8,8 +8,9 @@
             <a href="{{ `tags/` | relURL }}">标签</a>
             <a href="{{ `about/` | relURL }}">关于</a>
             <span>|</span>
-            <a href="{{ `search/` | relURL }}" aria-label="搜索">
-                {{ partial "helper/icon" "search" }}
+            <a class="sora-header-search" href="{{ `search/` | relURL }}" aria-label="搜索">
+                <span class="sora-nav-pill-icon">{{ partial "helper/icon" "search" }}</span>
+                <span>搜索</span>
             </a>
         </div>
     </nav>

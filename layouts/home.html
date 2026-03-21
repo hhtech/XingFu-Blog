@@ -31,7 +31,8 @@
                     <a class="sora-nav-pill" href="{{ `tags/` | relURL }}">标签</a>
                     <a class="sora-nav-pill" href="{{ `about/` | relURL }}">关于</a>
                     <a class="sora-nav-pill sora-search-pill" href="{{ `search/` | relURL }}" aria-label="搜索">
-                        {{ partial "helper/icon" "search" }}
+                        <span class="sora-nav-pill-icon">{{ partial "helper/icon" "search" }}</span>
+                        <span>搜索</span>
                     </a>
                 </nav>
             </div>

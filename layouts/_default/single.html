@@ -32,11 +32,25 @@
                     id="upvote-button"
                     type="button"
                     data-post-key="{{ .RelPermalink }}"
+                    data-reaction="upvote"
                     aria-pressed="false"
                 >
                     <span class="sora-inline-icon">{{ partial "helper/icon" "thumb-up" }}</span>
                     <span>赞</span>
                     <span id="upvote-number">0</span>
+                </button>
+
+                <button
+                    class="card-small sora-action-button sora-action-button-down"
+                    id="downvote-button"
+                    type="button"
+                    data-post-key="{{ .RelPermalink }}"
+                    data-reaction="downvote"
+                    aria-pressed="false"
+                >
+                    <span class="sora-inline-icon">{{ partial "helper/icon" "thumb-down" }}</span>
+                    <span>踩一踩</span>
+                    <span id="downvote-number">0</span>
                 </button>
             </div>
 
