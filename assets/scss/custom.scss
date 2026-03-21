@@ -299,7 +299,7 @@ body.sora-body {
 }
 
 .sora-post-card-title {
-    color: var(--sora-color-primary);
+    color: var(--sora-color-text);
     font-family: var(--sora-font-serif);
     font-size: clamp(1.95rem, calc(1.78rem + 0.22vw), 2.2rem);
     font-weight: 700;
@@ -338,6 +338,7 @@ body.sora-body {
 
 .sora-article-title {
     margin: 0;
+    color: var(--sora-color-text);
     text-align: center;
     font-size: clamp(3rem, calc(2.5rem + 0.7vw), 3.8rem);
     font-weight: 700;
@@ -873,7 +874,7 @@ body.sora-body {
 
 .search-result .article-title {
     margin: 0 0 0.4rem;
-    color: var(--sora-color-primary);
+    color: var(--sora-color-text);
     font-family: var(--sora-font-serif);
     font-size: clamp(1.8rem, calc(1.66rem + 0.12vw), 1.98rem);
     line-height: 1.5;
