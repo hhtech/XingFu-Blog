@@ -1,0 +1,22 @@
+<article class="sora-post-card">
+    <header>
+        <h2><a href="{{ .RelPermalink }}">{{ .Title }}</a></h2>
+        {{ with .Params.description }}
+            <p>{{ . | plainify | truncate 180 }}</p>
+        {{ end }}
+    </header>
+
+    <footer class="sora-post-meta">
+        {{ if not .Date.IsZero }}
+            <time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Date.Format "2006-01-02" }}</time>
+        {{ end }}
+
+        {{ with .GetTerms "categories" }}
+            <span class="sora-post-sep">/</span>
+            {{ range $index, $term := . }}
+                {{ if gt $index 0 }}<span class="sora-post-sep">·</span>{{ end }}
+                <a href="{{ $term.RelPermalink }}">{{ $term.LinkTitle }}</a>
+            {{ end }}
+        {{ end }}
+    </footer>
+</article>

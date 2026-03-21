@@ -1,0 +1,22 @@
+{{ define "main" }}
+    <section class="sora-page-header">
+        <span class="sora-page-kicker">
+            {{ if eq .Kind "taxonomy" }}分类浏览{{ else if eq .Kind "term" }}内容索引{{ else }}页面列表{{ end }}
+        </span>
+        <h1>{{ .Title }}</h1>
+        {{ with .Params.description }}
+            <p>{{ . }}</p>
+        {{ end }}
+    </section>
+
+    {{- $pages := partial "helper/pages.html" . -}}
+    {{- $paginator := .Paginate $pages -}}
+
+    <section class="sora-feed">
+        {{ range $paginator.Pages }}
+            {{ partial "sora/post-card.html" . }}
+        {{ end }}
+    </section>
+
+    {{ partial "pagination.html" . }}
+{{ end }}

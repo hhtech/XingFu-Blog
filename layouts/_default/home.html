@@ -1,0 +1,12 @@
+{{ define "main" }}
+    {{- $pages := partial "helper/pages.html" .Site.Home -}}
+    {{- $paginator := .Paginate $pages -}}
+
+    <section class="sora-feed">
+        {{ range $paginator.Pages }}
+            {{ partial "sora/post-card.html" . }}
+        {{ end }}
+    </section>
+
+    {{ partial "pagination.html" . }}
+{{ end }}

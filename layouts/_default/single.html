@@ -1,0 +1,58 @@
+{{ define "main" }}
+    <article class="sora-article">
+        <header class="sora-article-header">
+            {{ with .GetTerms "categories" }}
+                <div class="sora-taxonomy sora-taxonomy-top">
+                    {{ range . }}
+                        <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+                    {{ end }}
+                </div>
+            {{ end }}
+
+            <h1>{{ .Title }}</h1>
+
+            {{ with .Params.description }}
+                <p class="sora-article-description">{{ . | plainify | truncate 220 }}</p>
+            {{ end }}
+
+            <div class="sora-article-meta">
+                {{ if not .Date.IsZero }}
+                    <time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Date.Format "2006-01-02" }}</time>
+                {{ end }}
+                {{ if .ReadingTime }}
+                    <span>{{ .ReadingTime }} 分钟阅读</span>
+                {{ end }}
+                {{ if gt .WordCount 0 }}
+                    <span>{{ .WordCount }} 字</span>
+                {{ end }}
+            </div>
+        </header>
+
+        <section class="article-content sora-content">
+            {{ $wrappedTable := printf "<div class=\"table-wrapper\">${1}</div>" }}
+            {{ .Content | replaceRE "(<table>(?:.|\n)+?</table>)" $wrappedTable | safeHTML }}
+        </section>
+
+        {{ if or (.GetTerms "tags") (.GetTerms "categories") }}
+            <footer class="sora-article-footer">
+                {{ with .GetTerms "tags" }}
+                    <div class="sora-taxonomy">
+                        <span>标签</span>
+                        {{ range . }}
+                            <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+                        {{ end }}
+                    </div>
+                {{ end }}
+
+                {{ with .GetTerms "categories" }}
+                    <div class="sora-taxonomy">
+                        <span>分类</span>
+                        {{ range . }}
+                            <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+                        {{ end }}
+                    </div>
+                {{ end }}
+            </footer>
+        {{ end }}
+    </article>
+{{ end }}
