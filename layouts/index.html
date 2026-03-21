@@ -1,0 +1,53 @@
+{{ define "page-header" }}
+    {{- $avatar := partial "helper/image" (dict "Image" .Site.Params.sidebar.avatar "Resources" resources "Context" .) -}}
+    <header class="sora-home-header">
+        <div class="sora-home-hero">
+            {{ with $avatar.Permalink }}
+                <img src="{{ . }}" alt="{{ $.Site.Title }}" class="sora-home-avatar">
+            {{ end }}
+
+            <div class="sora-home-content">
+                <div class="sora-site-title">{{ .Site.Title }}</div>
+
+                <div class="sora-social-links">
+                    {{ range .Site.Menus.social }}
+                        <a href="{{ .URL }}" target="_blank" rel="noopener" aria-label="{{ .Name }}">
+                            {{ with .Params.icon }}
+                                {{ partial "helper/icon" . }}
+                            {{ else }}
+                                <span>{{ .Name }}</span>
+                            {{ end }}
+                        </a>
+                    {{ end }}
+
+                    <a href="{{ `rss.xml` | relURL }}" aria-label="RSS">
+                        {{ partial "helper/icon" "rss" }}
+                    </a>
+                </div>
+
+                <nav class="sora-home-nav" aria-label="Main">
+                    <a class="sora-nav-pill" href="{{ `archives/` | relURL }}">归档</a>
+                    <a class="sora-nav-pill" href="{{ `categories/` | relURL }}">分类</a>
+                    <a class="sora-nav-pill" href="{{ `tags/` | relURL }}">标签</a>
+                    <a class="sora-nav-pill" href="{{ `about/` | relURL }}">关于</a>
+                    <a class="sora-nav-pill sora-search-pill" href="{{ `search/` | relURL }}" aria-label="搜索">
+                        {{ partial "helper/icon" "search" }}
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+{{ end }}
+
+{{ define "main-class" }}sora-home-main{{ end }}
+
+{{ define "main" }}
+    {{- $paginator := partial "helper/paginator.html" . -}}
+    <section class="sora-post-list">
+        {{ range $paginator.Pages }}
+            {{ partial "sora/post-card.html" . }}
+        {{ end }}
+    </section>
+
+    {{ partial "pagination.html" . }}
+{{ end }}

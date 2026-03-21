@@ -1,0 +1,62 @@
+{{- $updated := .Date | time.Format "2006-01-02" -}}
+{{- with .Params.lastmod -}}
+    {{- $updated = ($.Lastmod | time.Format "2006-01-02") -}}
+{{- end -}}
+{{- if and (not .Params.lastmod) .GitInfo (ne (.GitInfo.AuthorDate | time.Format "2006-01-02") (.Date | time.Format "2006-01-02")) -}}
+    {{- $updated = (.GitInfo.AuthorDate | time.Format "2006-01-02") -}}
+{{- end -}}
+{{- $author := .Params.author | default .Site.Title -}}
+{{- $license := default "CC BY-NC-SA 4.0" .Site.Params.article.license.default -}}
+
+<div class="card sora-license" id="license">
+    <div id="license-icon"></div>
+
+    <div>{{ .Title }}</div>
+    <div class="license-item mt-1">{{ .Permalink }}</div>
+
+    <div class="sora-license-grid">
+        <div>
+            <div class="license-item">作者</div>
+            <span>{{ $author }}</span>
+        </div>
+
+        <div>
+            <div class="license-item">发布于</div>
+            <time datetime="{{ .Date.Format `2006-01-02T15:04:05Z07:00` }}">{{ .Date | time.Format `2006-01-02` }}</time>
+        </div>
+
+        <div>
+            <div class="license-item">更新于</div>
+            <time datetime="{{ .Lastmod.Format `2006-01-02T15:04:05Z07:00` }}">{{ $updated }}</time>
+        </div>
+
+        <div>
+            <div class="license-item">许可</div>
+            <div>
+                <a href="https://creativecommons.org/licenses" target="_blank" rel="noopener">{{ $license }}</a>
+            </div>
+        </div>
+    </div>
+
+    {{ if or (.GetTerms "categories") (.GetTerms "tags") }}
+        <div class="sora-license-taxonomies">
+            <span class="sora-license-chips">
+                {{ range (.GetTerms "categories") }}
+                    <a class="card-small" href="{{ .RelPermalink }}">
+                        <span class="sora-inline-icon">{{ partial "helper/icon" "categories" }}</span>
+                        <span>{{ .LinkTitle }}</span>
+                    </a>
+                {{ end }}
+            </span>
+
+            <span class="sora-license-chips">
+                {{ range (.GetTerms "tags") }}
+                    <a class="card-small" href="{{ .RelPermalink }}">
+                        <span class="sora-inline-icon">{{ partial "helper/icon" "tag" }}</span>
+                        <span>{{ .LinkTitle }}</span>
+                    </a>
+                {{ end }}
+            </span>
+        </div>
+    {{ end }}
+</div>

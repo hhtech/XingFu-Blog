@@ -1,0 +1,32 @@
+{{- $cover := or .Params.cover .Params.image -}}
+{{- $image := partial "helper/image" (dict "Image" $cover "Resources" .Resources "Context" .) -}}
+{{- $summarySource := .Params.description | default .Summary | default .Plain -}}
+{{- $summary := $summarySource | plainify | strings.TrimSpace -}}
+{{- $hasCover := false -}}
+{{- with $image.Permalink -}}
+    {{- $hasCover = true -}}
+{{- end -}}
+
+<a href="{{ .RelPermalink }}" class="sora-post-card {{ if $hasCover }}has-cover{{ end }}">
+    {{ with $image.Permalink }}
+        <img src="{{ . }}" alt="{{ $.Title }}" class="cover" loading="lazy">
+    {{ end }}
+
+    <div class="post">
+        <div class="sora-post-card-title">{{ .Title }}</div>
+
+        {{ if gt (len $summary) 0 }}
+            <div class="sora-post-card-summary">
+                {{ if $hasCover }}
+                    {{ $summary | truncate 80 }}
+                {{ else }}
+                    {{ $summary | truncate 150 }}
+                {{ end }}
+            </div>
+        {{ end }}
+
+        <div class="sora-post-card-meta">
+            <time datetime="{{ .Date.Format `2006-01-02T15:04:05Z07:00` }}">{{ .Date | time.Format `2006-01-02` }}</time>
+        </div>
+    </div>
+</a>

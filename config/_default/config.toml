@@ -5,6 +5,7 @@ theme = "hugo-theme-stack"
 defaultContentLanguage = "zh-cn"
 hasCJKLanguage = true
 enableRobotsTXT = true
+enableGitInfo = true
 
 [pagination]
     pagerSize = 6

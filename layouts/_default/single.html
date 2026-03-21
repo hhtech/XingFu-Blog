@@ -1,0 +1,46 @@
+{{ define "main-class" }}sora-single-main{{ end }}
+
+{{ define "main" }}
+    <article class="sora-article">
+        <div class="sora-article-title">{{ .Title }}</div>
+
+        {{ if eq .Type "post" }}
+            {{ partial "sora/article-meta.html" . }}
+            <div class="card post-time-tips text-gray">
+                <span id="post-time-tips-span"></span>
+            </div>
+        {{ end }}
+
+        <section class="sora-article-body">
+            <div id="post-content" class="sora-post-content">
+                {{ .Content }}
+            </div>
+
+            {{ if eq .Type "post" }}
+                <aside class="sora-post-toc-wrap">
+                    <nav id="toc" class="sora-post-toc" aria-label="目录"></nav>
+                </aside>
+            {{ end }}
+        </section>
+
+        {{ if eq .Type "post" }}
+            {{ partial "sora/article-license.html" . }}
+
+            {{ if and .Site.Params.comments.enabled (not (eq .Params.comments false)) }}
+                <div class="sora-comments">
+                    {{ partial "comments/include" . }}
+                </div>
+            {{ end }}
+        {{ end }}
+    </article>
+{{ end }}
+
+{{ define "after-main" }}
+    {{ if eq .Type "post" }}
+        <aside>
+            <div class="buttons">
+                <a class="to-top" href="#" aria-label="回到顶部"></a>
+            </div>
+        </aside>
+    {{ end }}
+{{ end }}

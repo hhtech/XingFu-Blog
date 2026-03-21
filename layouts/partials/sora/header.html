@@ -1,0 +1,16 @@
+<header>
+    <nav class="sora-header-nav" id="navigation" aria-label="Main">
+        <a class="sora-brand" href="{{ .Site.BaseURL | safeURL }}">{{ .Site.Title }}</a>
+
+        <div class="sora-header-links">
+            <a href="{{ `archives/` | relURL }}">归档</a>
+            <a href="{{ `categories/` | relURL }}">分类</a>
+            <a href="{{ `tags/` | relURL }}">标签</a>
+            <a href="{{ `about/` | relURL }}">关于</a>
+            <span>|</span>
+            <a href="{{ `search/` | relURL }}" aria-label="搜索">
+                {{ partial "helper/icon" "search" }}
+            </a>
+        </div>
+    </nav>
+</header>

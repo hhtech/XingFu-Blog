@@ -1,0 +1,41 @@
+{{ define "main" }}
+    {{ if eq .Kind "taxonomy" }}
+        <main class="sora-taxonomy-list">
+            {{ range .Data.Terms.Alphabetical }}
+                <span class="card-small sora-taxonomy-item">
+                    <span class="sora-inline-icon">
+                        {{ if eq $.Type "tags" }}
+                            {{ partial "helper/icon" "tag" }}
+                        {{ else }}
+                            {{ partial "helper/icon" "categories" }}
+                        {{ end }}
+                    </span>
+                    <a class="sora-taxonomy-link" href="{{ .Page.RelPermalink }}">{{ .Page.Title }}</a>
+                    <span>{{ .Count }}</span>
+                </span>
+            {{ end }}
+        </main>
+    {{ else }}
+        {{ if eq .Kind "term" }}
+            <div class="sora-term-heading">
+                <span class="sora-inline-icon">
+                    {{ if eq .Type "tags" }}
+                        {{ partial "helper/icon" "tag" }}
+                    {{ else }}
+                        {{ partial "helper/icon" "categories" }}
+                    {{ end }}
+                </span>
+                <span>{{ .Title }}</span>
+            </div>
+        {{ end }}
+
+        {{- $paginator := partial "helper/paginator.html" . -}}
+        <section class="sora-post-list">
+            {{ range $paginator.Pages }}
+                {{ partial "sora/post-card.html" . }}
+            {{ end }}
+        </section>
+
+        {{ partial "pagination.html" . }}
+    {{ end }}
+{{ end }}

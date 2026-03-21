@@ -1,0 +1,53 @@
+{{- $updated := `` -}}
+{{- with .Params.lastmod -}}
+    {{- $updated = ($.Lastmod | time.Format "2006-01-02") -}}
+{{- end -}}
+{{- if and (not .Params.lastmod) .GitInfo (ne (.GitInfo.AuthorDate | time.Format "2006-01-02") (.Date | time.Format "2006-01-02")) -}}
+    {{- $updated = (.GitInfo.AuthorDate | time.Format "2006-01-02") -}}
+{{- end -}}
+
+<div class="sora-post-meta">
+    <span>
+        <span class="sora-inline-icon">{{ partial "helper/icon" "date" }}</span>
+        <time id="post-publish-time" datetime="{{ .Date.Format `2006-01-02T15:04:05Z07:00` }}">{{ .Date | time.Format `2006-01-02` }}</time>
+    </span>
+
+    {{ if $updated }}
+        <span>
+            <span class="sora-inline-icon">{{ partial "helper/icon" "clock" }}</span>
+            <time id="post-update-time" datetime="{{ .Lastmod.Format `2006-01-02T15:04:05Z07:00` }}">{{ $updated }}</time>
+        </span>
+    {{ end }}
+
+    {{ with .GetTerms "categories" }}
+        <span>
+            <span class="sora-inline-icon">{{ partial "helper/icon" "categories" }}</span>
+            <span class="sora-taxonomy-links">
+                {{ range . }}
+                    <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+                {{ end }}
+            </span>
+        </span>
+    {{ end }}
+
+    {{ with .GetTerms "tags" }}
+        <span>
+            <span class="sora-inline-icon">{{ partial "helper/icon" "tag" }}</span>
+            <span class="sora-taxonomy-links">
+                {{ range . }}
+                    <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+                {{ end }}
+            </span>
+        </span>
+    {{ end }}
+
+    <span>
+        <span class="sora-inline-icon">{{ partial "helper/icon" "messages" }}</span>
+        <span id="post-wordcount"></span>
+    </span>
+
+    <span>
+        <span class="sora-inline-icon">{{ partial "helper/icon" "clock" }}</span>
+        <span id="post-readtime"></span>
+    </span>
+</div>

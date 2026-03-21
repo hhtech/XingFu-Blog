@@ -1,0 +1,22 @@
+{{- $posts := where .Site.RegularPages "Section" "post" -}}
+{{- $since := now.Format "2006" -}}
+{{- with first 1 (sort $posts "Date") -}}
+    {{- $since = ((index . 0).Date | time.Format "2006-01-02") -}}
+{{- end -}}
+{{- $author := default .Site.Title .Site.Copyright -}}
+<footer class="sora-footer">
+    <div class="sora-footer-stack">
+        <div>
+            &copy;
+            <span>{{ $since }}</span>
+            &middot;
+            <span>by {{ $author }}</span>
+        </div>
+        <div>
+            Powered by
+            <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a>
+            &
+            <a href="https://github.com/Liksone/halo-theme-sora" target="_blank" rel="noopener">Sora</a>
+        </div>
+    </div>
+</footer>
