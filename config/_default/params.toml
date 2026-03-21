@@ -14,7 +14,7 @@ SortBy = "default"
 [sidebar]
     compact = false
     emoji = "🪴"
-    subtitle = "记录技术、工具和随想。"
+    subtitle = "记录旧文、随想和新的开始。"
     avatar = "img/avatar.png"
 
 [article]

@@ -1,2 +1,2 @@
-post = "/p/:slug/"
+post = "/archives/:slug/"
 page = "/:slug/"

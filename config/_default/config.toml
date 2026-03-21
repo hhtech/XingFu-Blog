@@ -1,6 +1,6 @@
-baseURL = "https://hhtech.github.io/XingFu-Blog/"
+baseURL = "https://www.sunmer.top/"
 languageCode = "zh-cn"
-title = "XingFu Blog"
+title = "Xing Fu' Blog"
 theme = "hugo-theme-stack"
 defaultContentLanguage = "zh-cn"
 hasCJKLanguage = true
