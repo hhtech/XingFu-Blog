@@ -14,6 +14,14 @@
     [main.params]
         icon = "tag"
 
+[[main]]
+    identifier = "admin"
+    name = "Admin"
+    url = "/admin/"
+
+    [main.params]
+        icon = "settings"
+
 [[social]]
     identifier = "github"
     name = "GitHub"
