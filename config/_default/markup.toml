@@ -1,0 +1,23 @@
+[goldmark.renderer]
+    unsafe = true
+
+[goldmark.extensions.passthrough]
+    enable = true
+
+    [goldmark.extensions.passthrough.delimiters]
+        block = [['\[', '\]'], ['$$', '$$']]
+        inline = [['\(', '\)']]
+
+[tableOfContents]
+    startLevel = 2
+    endLevel = 4
+    ordered = true
+
+[highlight]
+    noClasses = false
+    codeFences = true
+    guessSyntax = true
+    lineNos = true
+    lineNumbersInTable = true
+    lineNoStart = 1
+    tabWidth = 4

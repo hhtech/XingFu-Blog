@@ -1,7 +1,8 @@
-+++
-title = "首页"
-+++
-
-这是一个基于 `beautifulhugo` 主题构建的 Hugo 站点。
-
-目前已经接好 GitHub Pages 自动部署。后续你只需要修改这里的内容、站点标题和菜单，就能把它变成自己的博客或个人主页。
+---
+menu:
+    main:
+        name: 首页
+        weight: 1
+        params:
+            icon: home
+---

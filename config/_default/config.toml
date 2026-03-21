@@ -1,0 +1,10 @@
+baseURL = "https://hhtech.github.io/XingFu-Blog/"
+languageCode = "zh-cn"
+title = "XingFu Blog"
+theme = "hugo-theme-stack"
+defaultContentLanguage = "zh-cn"
+hasCJKLanguage = true
+enableRobotsTXT = true
+
+[pagination]
+    pagerSize = 6

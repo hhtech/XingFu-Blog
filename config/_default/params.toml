@@ -1,0 +1,64 @@
+mainSections = ["post"]
+rssFullContent = true
+favicon = "img/favicon.png"
+SortBy = "default"
+
+[footer]
+    since = 2026
+    customText = ""
+
+[dateFormat]
+    published = "2006-01-02"
+    lastUpdated = "2006-01-02"
+
+[sidebar]
+    compact = false
+    emoji = "🪴"
+    subtitle = "记录技术、工具和随想。"
+    avatar = "img/avatar.png"
+
+[article]
+    headingAnchor = false
+    math = false
+    toc = true
+    readingTime = true
+
+    [article.list]
+        showTags = true
+
+    [article.license]
+        enabled = false
+        default = "Licensed under CC BY-NC-SA 4.0"
+
+[widgets]
+    homepage = [
+        { type = "search" },
+        { type = "archives", params = { limit = 5 } },
+        { type = "categories", params = { limit = 10 } },
+        { type = "tag-cloud", params = { limit = 12 } }
+    ]
+    page = [{ type = "toc" }]
+
+[opengraph.twitter]
+    site = ""
+    card = "summary_large_image"
+
+[colorScheme]
+    toggle = true
+    default = "auto"
+
+[imageProcessing]
+    autoOrient = false
+
+    [imageProcessing.external]
+        timeout = "5s"
+
+    [imageProcessing.content]
+        enabled = true
+        widths = [800, 1600, 2400]
+
+    [imageProcessing.thumbnail]
+        enabled = true
+
+[comments]
+    enabled = false
