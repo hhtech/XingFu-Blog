@@ -1,0 +1,41 @@
+{{ define "body-class" }}template-search{{ end }}
+
+{{ define "head" }}
+    {{- with .OutputFormats.Get "json" -}}
+        <link rel="preload" href="{{ .RelPermalink }}" as="fetch" crossorigin="anonymous">
+    {{- end -}}
+{{ end }}
+
+{{ define "main-class" }}sora-search-main{{ end }}
+
+{{ define "main" }}
+    <section class="sora-search-page">
+        <div class="sora-search-intro">
+            搜索站内文章与页面内容
+        </div>
+
+        <form action="{{ .RelPermalink }}" class="search-form"{{ with .OutputFormats.Get "json" -}} data-json="{{ .RelPermalink }}"{{- end }}>
+            <p>
+                <label for="searchInput">搜索内容</label>
+                <input id="searchInput" name="keyword" placeholder="输入关键词后即时筛选" />
+            </p>
+
+            <button title="搜索" type="submit">
+                {{ partial "helper/icon" "search" }}
+            </button>
+        </form>
+
+        <div class="search-result hidden">
+            <h3 class="search-result--title section-title"></h3>
+            <div class="search-result--list article-list--compact"></div>
+        </div>
+    </section>
+
+    <script>
+        window.searchResultTitleTemplate = "共找到 #PAGES_COUNT 条结果，用时 #TIME_SECONDS 秒"
+    </script>
+
+    {{- $opts := dict "minify" hugo.IsProduction "JSXFactory" "createElement" -}}
+    {{- $searchScript := resources.Get "ts/search.tsx" | js.Build $opts -}}
+    <script type="text/javascript" src="{{ $searchScript.RelPermalink }}" defer></script>
+{{ end }}

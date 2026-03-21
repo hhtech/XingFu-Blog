@@ -26,6 +26,20 @@
         {{ if eq .Type "post" }}
             {{ partial "sora/article-license.html" . }}
 
+            <div class="sora-post-actions">
+                <button
+                    class="card-small sora-action-button"
+                    id="upvote-button"
+                    type="button"
+                    data-post-key="{{ .RelPermalink }}"
+                    aria-pressed="false"
+                >
+                    <span class="sora-inline-icon">{{ partial "helper/icon" "thumb-up" }}</span>
+                    <span>赞</span>
+                    <span id="upvote-number">0</span>
+                </button>
+            </div>
+
             {{ if and .Site.Params.comments.enabled (not (eq .Params.comments false)) }}
                 <div class="sora-comments">
                     {{ partial "comments/include" . }}

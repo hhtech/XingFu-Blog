@@ -6,7 +6,62 @@ document.addEventListener("DOMContentLoaded", () => {
   const updateTime = document.getElementById("post-update-time");
   const wordCount = document.getElementById("post-wordcount");
   const readTime = document.getElementById("post-readtime");
+  const visitCount = document.getElementById("post-visit-count");
   const timeTips = document.getElementById("post-time-tips-span");
+  const upvoteButton = document.getElementById("upvote-button");
+  const upvoteNumber = document.getElementById("upvote-number");
+
+  const syncVisits = () => {
+    if (!visitCount) {
+      return;
+    }
+
+    const key = `sora:visit:${window.location.pathname}`;
+    const sessionKey = `sora:visit-session:${window.location.pathname}`;
+    let visits = Number(localStorage.getItem(key) || "0");
+
+    if (!sessionStorage.getItem(sessionKey)) {
+      visits += 1;
+      localStorage.setItem(key, String(visits));
+      sessionStorage.setItem(sessionKey, "1");
+    }
+
+    visitCount.textContent = String(visits);
+  };
+
+  const syncUpvote = () => {
+    if (!upvoteButton || !upvoteNumber) {
+      return;
+    }
+
+    const postKey = upvoteButton.dataset.postKey || window.location.pathname;
+    const votedKey = "sora:upvoted-posts";
+    const countKey = `sora:upvote-count:${postKey}`;
+    const votedPosts = new Set(JSON.parse(localStorage.getItem(votedKey) || "[]"));
+    let count = Number(localStorage.getItem(countKey) || upvoteNumber.textContent || "0");
+
+    const renderState = () => {
+      upvoteNumber.textContent = String(count);
+      const active = votedPosts.has(postKey);
+      upvoteButton.classList.toggle("active", active);
+      upvoteButton.setAttribute("aria-pressed", active ? "true" : "false");
+      upvoteButton.title = active ? "已点赞" : "点赞";
+    };
+
+    renderState();
+
+    upvoteButton.addEventListener("click", () => {
+      if (votedPosts.has(postKey)) {
+        return;
+      }
+
+      votedPosts.add(postKey);
+      count += 1;
+      localStorage.setItem(votedKey, JSON.stringify(Array.from(votedPosts)));
+      localStorage.setItem(countKey, String(count));
+      renderState();
+    });
+  };
 
   if (content) {
     const text = (content.textContent || "").replace(/\s+/g, "");
@@ -80,6 +135,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   }
+
+  syncVisits();
+  syncUpvote();
 
   if (toTop) {
     const syncToTop = () => {
