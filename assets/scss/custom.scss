@@ -10,6 +10,8 @@
     --sora-color-border-strong: #dddddd;
     --sora-color-shadow: rgba(0, 0, 0, 0.1);
     --sora-radius: 0.5rem;
+    --sora-font-display: "Noto Serif CJK", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", ui-serif, serif;
+    --sora-font-reading: "LXGW WenKai", "Klee One", "STKaiti", "KaiTi", serif;
     --sora-font-serif: "Noto Serif CJK", "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", ui-serif, serif;
     --sora-font-sans: "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", ui-sans-serif, sans-serif;
     --sora-font-mono: "Maple Mono NF CN", "JetBrains Mono", "Cascadia Code", "SFMono-Regular", ui-monospace, monospace;
@@ -30,6 +32,8 @@ body.sora-body {
     font-family: var(--sora-font-sans);
     font-size: 1.6rem;
     line-height: 1.85;
+    font-kerning: normal;
+    font-feature-settings: "kern" 1, "liga" 1;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -74,21 +78,21 @@ body.sora-body {
     width: 100%;
     max-width: 44rem;
     gap: 1.25rem;
-    font-family: var(--sora-font-mono);
+    font-family: var(--sora-font-sans);
 }
 
 .sora-site-title,
 .sora-article-title,
 .sora-term-heading {
-    font-family: var(--sora-font-serif);
+    font-family: var(--sora-font-display);
 }
 
 .sora-site-title {
     color: #111;
-    font-family: var(--sora-font-mono);
+    font-family: var(--sora-font-display);
     font-size: clamp(2.2rem, calc(1.95rem + 1vw), 3.05rem);
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
     line-height: 1.35;
     text-wrap: balance;
 }
@@ -149,8 +153,10 @@ body.sora-body {
     border: 1px solid rgba(17, 24, 39, 0.08);
     background: rgba(255, 255, 255, 0.78);
     box-shadow: 0 8px 20px rgba(17, 24, 39, 0.04);
+    font-family: var(--sora-font-sans);
     font-size: clamp(1.45rem, calc(1.35rem + 0.12vw), 1.6rem);
     font-weight: 600;
+    letter-spacing: 0.01em;
     text-decoration: none;
     transition:
         transform 0.2s ease,
@@ -184,7 +190,7 @@ body.sora-body {
     margin-bottom: 2rem;
     padding: 0.875rem 0;
     border-bottom: 1px solid var(--sora-color-border-strong);
-    font-family: var(--sora-font-mono);
+    font-family: var(--sora-font-sans);
 }
 
 .sora-brand,
@@ -196,7 +202,9 @@ body.sora-body {
 
 .sora-brand {
     font-size: clamp(1.7rem, calc(1.58rem + 0.12vw), 1.88rem);
-    font-family: var(--sora-font-mono);
+    font-family: var(--sora-font-display);
+    font-weight: 600;
+    letter-spacing: 0.03em;
     text-decoration: none;
 }
 
@@ -300,11 +308,11 @@ body.sora-body {
 
 .sora-post-card-title {
     color: var(--sora-color-text);
-    font-family: var(--sora-font-serif);
+    font-family: var(--sora-font-display);
     font-size: clamp(1.95rem, calc(1.78rem + 0.22vw), 2.2rem);
-    font-weight: 700;
-    line-height: 1.5;
-    letter-spacing: 0.02em;
+    font-weight: 600;
+    line-height: 1.52;
+    letter-spacing: 0.03em;
     text-wrap: balance;
 }
 
@@ -321,15 +329,19 @@ body.sora-body {
     overflow: hidden;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 4;
+    font-family: var(--sora-font-reading);
     font-size: clamp(1.45rem, calc(1.35rem + 0.08vw), 1.58rem);
-    line-height: 1.95;
+    line-height: 1.92;
+    letter-spacing: 0.02em;
     text-wrap: pretty;
 }
 
 .sora-post-card-meta {
     display: flex;
     justify-content: space-between;
+    font-family: var(--sora-font-sans);
     font-size: clamp(1.22rem, calc(1.14rem + 0.08vw), 1.32rem);
+    letter-spacing: 0.01em;
 }
 
 .sora-article {
@@ -341,9 +353,9 @@ body.sora-body {
     color: var(--sora-color-text);
     text-align: center;
     font-size: clamp(3rem, calc(2.5rem + 0.7vw), 3.8rem);
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.42;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.05em;
     text-wrap: balance;
 }
 
@@ -356,6 +368,7 @@ body.sora-body {
     font-family: var(--sora-font-sans);
     font-size: clamp(1.4rem, calc(1.34rem + 0.06vw), 1.5rem);
     line-height: 1.8;
+    letter-spacing: 0.01em;
 }
 
 .sora-post-meta span {
@@ -413,8 +426,10 @@ body.sora-body {
 .sora-post-content {
     max-width: 72ch;
     margin: 0 auto;
+    font-family: var(--sora-font-reading);
     font-size: clamp(1.72rem, calc(1.58rem + 0.16vw), 1.92rem);
-    line-height: 2.02;
+    line-height: 2.04;
+    letter-spacing: 0.015em;
     word-break: break-word;
     text-wrap: pretty;
 }
@@ -426,9 +441,10 @@ body.sora-body {
     margin: 1.3em 0 0.8em;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid #f2f3f4;
-    font-family: var(--sora-font-serif);
-    font-weight: 700;
+    font-family: var(--sora-font-display);
+    font-weight: 600;
     line-height: 1.55;
+    letter-spacing: 0.03em;
     text-wrap: balance;
 }
 
@@ -491,6 +507,7 @@ body.sora-body {
     border-radius: 0 8px 8px 0;
     background: rgba(255, 255, 255, 0.72);
     color: var(--sora-color-muted);
+    font-family: var(--sora-font-reading);
 }
 
 .sora-post-content code {
@@ -538,7 +555,7 @@ body.sora-body {
     position: sticky;
     top: 2.5rem;
     padding-left: 1rem;
-    font-family: var(--sora-font-serif);
+    font-family: var(--sora-font-reading);
     font-size: 0.8rem;
 }
 
@@ -595,9 +612,9 @@ body.sora-body {
 
 .sora-license > div:first-of-type {
     color: var(--sora-color-text);
-    font-family: var(--sora-font-serif);
+    font-family: var(--sora-font-display);
     font-size: clamp(1.95rem, calc(1.82rem + 0.12vw), 2.1rem);
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1.5;
 }
 
@@ -757,7 +774,8 @@ body.sora-body {
 
 .sora-archive-year h2 {
     margin-bottom: 0.75rem;
-    font-family: var(--sora-font-serif);
+    font-family: var(--sora-font-display);
+    font-weight: 600;
 }
 
 .sora-archive-item {
@@ -768,14 +786,14 @@ body.sora-body {
     display: inline-block;
     min-width: 6.75rem;
     margin-right: 1rem;
-    font-family: var(--sora-font-mono);
+    font-family: var(--sora-font-sans);
     font-size: 1.35rem;
 }
 
 .sora-archive-link {
     color: #000;
-    font-family: var(--sora-font-serif);
-    font-weight: 700;
+    font-family: var(--sora-font-display);
+    font-weight: 600;
     font-size: 1.8rem;
 }
 
@@ -799,8 +817,9 @@ body.sora-body {
     display: inline-block;
     margin-bottom: 0.5rem;
     color: var(--sora-color-muted);
-    font-family: var(--sora-font-mono);
-    font-size: 0.875rem;
+    font-family: var(--sora-font-sans);
+    font-size: 1.28rem;
+    line-height: 1.6;
 }
 
 .search-form input {
@@ -836,14 +855,14 @@ body.sora-body {
 .sora-search-intro {
     margin-bottom: 1rem;
     color: var(--sora-color-muted);
-    font-family: var(--sora-font-mono);
+    font-family: var(--sora-font-sans);
     font-size: 1.45rem;
 }
 
 .search-result--title {
     margin: 0 0 0.75rem;
     color: var(--sora-color-text);
-    font-family: var(--sora-font-mono);
+    font-family: var(--sora-font-sans);
     font-size: 1.4rem;
 }
 
@@ -875,16 +894,19 @@ body.sora-body {
 .search-result .article-title {
     margin: 0 0 0.4rem;
     color: var(--sora-color-text);
-    font-family: var(--sora-font-serif);
+    font-family: var(--sora-font-display);
     font-size: clamp(1.8rem, calc(1.66rem + 0.12vw), 1.98rem);
     line-height: 1.5;
+    font-weight: 600;
+    letter-spacing: 0.03em;
     text-wrap: balance;
 }
 
 .search-result .article-preview {
     color: var(--sora-color-muted);
+    font-family: var(--sora-font-reading);
     font-size: clamp(1.4rem, calc(1.3rem + 0.06vw), 1.5rem);
-    line-height: 1.85;
+    line-height: 1.9;
     text-wrap: pretty;
 }
 
@@ -931,8 +953,10 @@ body.sora-body {
     height: auto;
     padding: 0.2rem 0.1rem;
     border-bottom: 2px solid transparent;
-    font-family: var(--sora-font-mono);
+    font-family: var(--sora-font-display);
     font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
 }
 
 .pagination .page-link-number.current {
@@ -942,6 +966,7 @@ body.sora-body {
 
 .pagination .page-link-arrow {
     padding: 0.15rem 0.3rem;
+    font-family: var(--sora-font-sans);
     font-size: 1.8rem;
 }
 
