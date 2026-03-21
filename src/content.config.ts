@@ -2,6 +2,26 @@ import { z, defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
 import dayjs from "dayjs";
 
+const shanghaiDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function formatShanghaiDate(value: Date) {
+  const parts = shanghaiDateFormatter.formatToParts(value);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (year && month && day) {
+    return `${year}-${month}-${day}`;
+  }
+
+  return dayjs(value).format("YYYY-MM-DD");
+}
+
 function normalizeDate(value: string | Date) {
   if (typeof value === "string") {
     const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
@@ -10,7 +30,7 @@ function normalizeDate(value: string | Date) {
     }
   }
 
-  return dayjs(value).format("YYYY-MM-DD");
+  return formatShanghaiDate(value);
 }
 
 const blog = defineCollection({
