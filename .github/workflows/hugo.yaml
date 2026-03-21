@@ -45,6 +45,9 @@ jobs:
       - name: Build with Hugo
         run: hugo --gc --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
 
+      - name: Remove stale custom domain file
+        run: rm -f public/CNAME
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
