@@ -1,0 +1,13 @@
+{{- $pages := .Pages -}}
+
+{{- if eq .Context.Site.Params.SortBy "lastmod" -}}
+    {{- $pages = $pages.ByLastmod.Reverse -}}
+{{- else -}}
+    {{- $weighted := where $pages "Params.weight" "!=" nil -}}
+    {{- $weighted = sort $weighted "Params.weight" "asc" -}}
+    {{- $plain := where $pages "Params.weight" "==" nil -}}
+    {{- $plain = $plain.ByDate.Reverse -}}
+    {{- $pages = $weighted | append $plain -}}
+{{- end -}}
+
+{{- return $pages -}}
