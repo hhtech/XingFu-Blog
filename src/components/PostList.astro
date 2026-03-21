@@ -1,0 +1,89 @@
+---
+import type { Page } from "astro";
+import type { CollectionEntry } from "astro:content";
+import { generateDescription } from "@scripts/post-utils";
+import { postPermalink, withBase } from "@scripts/site-utils";
+
+const { posts, page } = Astro.props as {
+  posts: CollectionEntry<"blog">[];
+  page?: Page;
+};
+---
+
+<main class="mx-auto max-w-3xl">
+  <div class="flex flex-col gap-6">
+    {
+      posts.map((post) => (
+        <a href={postPermalink(post)} class="card-post card-lg card-shadow-hover">
+          {post.data.cover && <img src={withBase(post.data.cover)} alt={post.data.title} class="cover" />}
+
+          <div class="post flex flex-col gap-2">
+            <div class="font-serif text-lg font-semibold">{post.data.title}</div>
+
+            <div class="text-neutral text-sm">
+              {post.data.cover ? generateDescription(post, 80) : generateDescription(post, 150)}
+            </div>
+
+            <div class="flex flex-wrap gap-3 text-[0.8rem] text-neutral-500">
+              {post.data.updateDate && (
+                <span>
+                  <span class="icon-[fluent--wrench-16-filled] iconify-inline" />
+                  <time>{post.data.updateDate}</time>
+                </span>
+              )}
+              <span>
+                <span class="icon-[solar--pen-bold] iconify-inline" />
+                <time>{post.data.publishDate}</time>
+              </span>
+            </div>
+          </div>
+        </a>
+      ))
+    }
+  </div>
+
+  {
+    page && page.lastPage > 1 && (
+      <div class="mt-8 flex items-center justify-center">
+        {page.url.prev && (
+          <a
+            href={page.url.prev}
+            rel="prev"
+            class="iconify-middle icon-[material-symbols--chevron-left-rounded]"
+          />
+        )}
+        <span>
+          {page.currentPage} / {page.lastPage}
+        </span>
+        {page.url.next && (
+          <a
+            href={page.url.next}
+            rel="next"
+            class="icon-[material-symbols--chevron-right-rounded] iconify-middle"
+          />
+        )}
+      </div>
+    )
+  }
+</main>
+
+<style>
+  .card-post {
+    position: relative;
+  }
+  .card-post > .cover + .post {
+    width: 60%;
+  }
+  .card-post > .cover {
+    height: 100%;
+    width: min(320px, 50%);
+    object-fit: cover;
+    margin: 0;
+    mask: linear-gradient(90deg, transparent, white 50%);
+    opacity: 0.8;
+    position: absolute;
+    top: 0;
+    right: 0;
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  }
+</style>

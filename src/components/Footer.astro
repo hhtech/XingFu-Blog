@@ -1,0 +1,57 @@
+---
+import { themeConfig } from "@config";
+import { Image } from "astro:assets";
+import policeIcon from "@images/police.png";
+
+const copyrightTime = themeConfig.footer.copyright.time;
+const copyrightOwner = themeConfig.footer.copyright.owner;
+---
+
+<footer class="pt-20 pb-6">
+  <div class="flex flex-col items-center gap-1">
+    <div>
+      &copy;
+      <span>{copyrightOwner}</span>
+      ·
+      <span>{copyrightTime}</span>
+    </div>
+
+    {
+      (themeConfig.footer.beian.icp.enabled || themeConfig.footer.beian.police.enabled) && (
+        <div class="text-sm">
+          {themeConfig.footer.beian.icp.enabled && (
+            <span>
+              <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener">
+                {themeConfig.footer.beian.icp.number}
+              </a>
+            </span>
+          )}
+          {themeConfig.footer.beian.icp.enabled && themeConfig.footer.beian.police.enabled && <span> · </span>}
+          {themeConfig.footer.beian.police.enabled && (
+            <span>
+              <Image src={policeIcon} alt="警徽" class="inline h-[1rem] w-auto" />
+              <a href={themeConfig.footer.beian.police.url} target="_blank" rel="noopener">
+                {themeConfig.footer.beian.police.number}
+              </a>
+            </span>
+          )}
+        </div>
+      )
+    }
+
+    <div>
+      Powered by
+      <a href="https://astro.build" target="_blank" rel="noopener">Astro</a>
+      &amp;
+      <a href="https://github.com/Liksone/astro-theme-sora" target="_blank" rel="noopener">
+        Sora
+      </a>
+    </div>
+  </div>
+</footer>
+
+<style>
+  a {
+    color: var(--color-primary);
+  }
+</style>

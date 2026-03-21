@@ -1,0 +1,42 @@
+---
+import { themeConfig } from "@config";
+import { withBase } from "@scripts/site-utils";
+
+const { page } = Astro.props;
+---
+
+<header>
+  <nav class="mb-10 flex items-center justify-between py-4 font-mono" id="navigation">
+    <a class="text-lg font-bold" href={withBase("/")}>{themeConfig.site.title}</a>
+    <div class="text-neutral flex gap-4">
+      {
+        themeConfig.nav.map((item) =>
+          item.name === page ? (
+            <a class="text-primary font-bold" href={withBase(item.url)}>
+              {item.name}
+            </a>
+          ) : (
+            <a class="hover" href={withBase(item.url)}>
+              {item.name}
+            </a>
+          ),
+        )
+      }
+      {
+        themeConfig.global.i18n && (
+          <a class="hover" href={withBase("/en")}>
+            EN
+          </a>
+        )
+      }
+    </div>
+  </nav>
+</header>
+
+<style>
+  @reference "@styles/main.css";
+
+  .hover {
+    @apply hover:text-primary transition duration-300 hover:font-bold;
+  }
+</style>

@@ -1,0 +1,25 @@
+---
+import Layout from "@layouts/Layout.astro";
+import { getCategoryUrl } from "@scripts/url-utils";
+import { getSortedCollection } from "@scripts/content-utils";
+
+const posts = await getSortedCollection("blog");
+const categories = [...new Set(posts.map((post) => post.data.categories || []).flat())];
+---
+
+<Layout title="分类" headerPage="分类">
+  <main class="flex flex-wrap gap-4">
+    {
+      categories.map((category) => {
+        const filteredPosts = posts.filter((post) => post.data.categories?.includes(category));
+        return (
+          <a class="card-shadow-hover card-sm" href={getCategoryUrl(category)}>
+            <span class="icon-[material-symbols--folder-outline-rounded] iconify-inline" />
+            {category}
+            <span class="text-neutral text-sm">{filteredPosts.length}</span>
+          </a>
+        );
+      })
+    }
+  </main>
+</Layout>

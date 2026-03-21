@@ -1,0 +1,73 @@
+---
+import Footer from "@components/Footer.astro";
+import Header from "@components/Header.astro";
+import "@styles/main.css";
+import { themeConfig } from "@config";
+import { withBase } from "@scripts/site-utils";
+
+const { title = false, header = true, headerPage } = Astro.props;
+---
+
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="author" content={themeConfig.site.author} />
+    <meta name="description" content={themeConfig.site.description} />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>
+      {title ? `${title} | ${themeConfig.site.title}` : themeConfig.site.title}
+    </title>
+
+    {
+      themeConfig.site.favicon.endsWith(".svg") && (
+        <link rel="icon" type="image/svg+xml" href={withBase(`/favicon/${themeConfig.site.favicon}`)} />
+      )
+    }
+    {
+      themeConfig.site.favicon.endsWith(".png") && (
+        <link rel="icon" type="image/png" href={withBase(`/favicon/${themeConfig.site.favicon}`)} />
+      )
+    }
+    {
+      themeConfig.site.favicon.endsWith(".ico") && (
+        <link rel="icon" type="image/x-icon" href={withBase(`/favicon/${themeConfig.site.favicon}`)} />
+      )
+    }
+
+    <link rel="sitemap" href={withBase("/sitemap-index.xml")} />
+
+    <link rel="stylesheet" href={withBase("/fonts/HarmonyOS_Sans_SC/result.css")} />
+    <link rel="preconnect" href="https://fontsapi.zeoseven.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fontsapi.zeoseven.com/285/main/result.css"
+      onerror="this.href='https://fontsapi-storage.zeoseven.com/285/main/result.css'"
+    />
+    <link rel="preconnect" href="https://fontsapi.zeoseven.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fontsapi.zeoseven.com/442/main/result.css"
+      onerror="this.href='https://fontsapi-storage.zeoseven.com/442/main/result.css'"
+    />
+    <link rel="stylesheet" href="https://fontsapi.zeoseven.com/442/italic/result.css" />
+    <link rel="stylesheet" href="https://fontsapi.zeoseven.com/442/bold/result.css" />
+    <link rel="stylesheet" href="https://fontsapi.zeoseven.com/442/bold-italic/result.css" />
+    {
+      themeConfig.tools.umami.enabled && (
+        <script
+          defer
+          src={`${themeConfig.tools.umami.src}/script.js`}
+          data-website-id={themeConfig.tools.umami.websiteID}
+        />
+      )
+    }
+  </head>
+
+  <body>
+    {header && <Header page={headerPage} />}
+    <slot />
+    <Footer />
+  </body>
+</html>

@@ -1,0 +1,50 @@
+{
+  "name": "astro-theme-sora",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro build && astro preview",
+    "astro": "astro",
+    "init": "esno scripts/init.ts"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^6.3.2",
+    "@astrojs/rss": "^4.0.12",
+    "@astrojs/sitemap": "^3.4.1",
+    "@astrojs/solid-js": "^5.1.0",
+    "@tailwindcss/vite": "^4.1.8",
+    "@types/fs-extra": "^11.0.4",
+    "artalk": "^2.9.1",
+    "astro": "^5.9.2",
+    "esno": "^4.8.0",
+    "fs-extra": "^11.3.0",
+    "hast-util-from-html": "^2.0.3",
+    "hast-util-to-string": "^3.0.1",
+    "hast-util-to-text": "^4.0.2",
+    "mdast-util-from-markdown": "^2.0.2",
+    "mdast-util-to-string": "^4.0.0",
+    "reading-time": "^1.5.0",
+    "rehype-autolink-headings": "^7.1.0",
+    "remark": "^15.0.1",
+    "remark-mdc": "^3.6.0",
+    "remark-retext": "^6.0.1",
+    "sharp": "^0.34.2",
+    "solid-js": "^1.9.7",
+    "strip-markdown": "^6.0.0",
+    "tailwindcss": "^4.1.8",
+    "unist-util-visit": "^5.0.0",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@iconify/json": "^2.2.347",
+    "@iconify/tailwind4": "^1.0.6",
+    "@types/hast": "^3.0.4",
+    "dayjs": "^1.11.13",
+    "prettier": "3.5.3",
+    "prettier-plugin-astro": "0.14.1",
+    "prettier-plugin-tailwindcss": "^0.6.12",
+    "typescript": "^5.8.3"
+  }
+}

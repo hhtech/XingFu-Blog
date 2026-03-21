@@ -1,0 +1,94 @@
+---
+import Layout from "@layouts/Layout.astro";
+import { Image } from "astro:assets";
+import { themeConfig } from "@config";
+import { getSortedCollection } from "@scripts/content-utils";
+import { getImportImage } from "@scripts/image-utils";
+import PostList from "@components/PostList.astro";
+import type { GetStaticPaths } from "astro";
+import { withBase } from "@scripts/site-utils";
+
+export const getStaticPaths = (async ({ paginate }) => {
+  const allPosts = await getSortedCollection("blog");
+  return paginate(allPosts, { pageSize: themeConfig.site.pageSize || 6 });
+}) satisfies GetStaticPaths;
+
+const { page } = Astro.props;
+const posts = page.data;
+
+const iconMap: Record<string, string> = {
+  BiliBili: "icon-[mingcute--bilibili-line]",
+  Email: "icon-[material-symbols--mail-outline-rounded]",
+  Facebook: "icon-[mingcute--facebook-line]",
+  GitHub: "icon-[mingcute--github-line]",
+  Instagram: "icon-[mdi--instagram]",
+  QQ: "icon-[mingcute--qq-line]",
+  Telegram: "icon-[ri--telegram-line]",
+  "Twitter/X": "icon-[si--twitter-line]",
+  YouTube: "icon-[mingcute--youtube-line]",
+  微博: "icon-[icon-park-outline--weibo]",
+  小红书: "icon-[simple-icons--xiaohongshu]",
+  知乎: "icon-[ri--zhihu-fill]",
+};
+---
+
+<Layout header={false}>
+  <header>
+    <div class="mt-20 mb-16 flex flex-col items-center justify-center gap-8 sm:flex-row sm:gap-14">
+      <Image
+        src={getImportImage(themeConfig.global.avatar)}
+        class="h-40 w-auto rounded-full"
+        alt={themeConfig.site.title}
+      />
+
+      <div class="flex flex-col items-center gap-5 font-mono">
+        <div class="text-4xl">{themeConfig.site.title}</div>
+
+        <div class="flex justify-center gap-2">
+          {
+            themeConfig.index.social
+              .filter((item) => item.enabled)
+              .map((item) => (
+                <a href={item.url} target="_blank" rel="noopener">
+                  <span class={`iconify-large ${iconMap[item.name]} hover:text-primary`} />
+                </a>
+              ))
+          }
+
+          {
+            themeConfig.global.rss && (
+              <a href={withBase("/rss.xml")}>
+                <span class="iconify-large icon-[heroicons--rss] hover:text-primary" />
+              </a>
+            )
+          }
+        </div>
+
+        <nav class="flex justify-center gap-4">
+          {themeConfig.nav.map((item) => (
+            <a class="card-invert" href={withBase(item.url)}>
+              {item.name}
+            </a>
+          ))}
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <PostList posts={posts} page={page} />
+</Layout>
+
+<style>
+  @reference "tailwindcss";
+
+  .card-invert {
+    @apply transition duration-300;
+    background-color: var(--color-bg-dark);
+    border-radius: var(--radius-sm);
+    padding: 0.4rem 0.5rem;
+  }
+  .card-invert:hover {
+    background-color: var(--color-primary);
+    color: white;
+  }
+</style>

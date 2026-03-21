@@ -1,0 +1,307 @@
+---
+import { getCollection, render } from "astro:content";
+import type { GetStaticPaths } from "astro";
+import Layout from "@layouts/Layout.astro";
+import { themeConfig } from "@config";
+import dayjs from "dayjs";
+import { getCategoryUrl, getTagUrl } from "@scripts/url-utils";
+import ToTop from "@components/ToTop.tsx";
+import Sponsor from "@components/Sponsor.astro";
+import Comment from "@components/Comment.astro";
+
+export const getStaticPaths = (async () => {
+  const posts = (await getCollection("blog")).filter((post) => !post.data.draft);
+  return posts.map((post) => ({
+    params: { slug: post.data.slug || post.id },
+    props: { post },
+  }));
+}) satisfies GetStaticPaths;
+
+const { post } = Astro.props;
+const { Content, headings, remarkPluginFrontmatter } = await render(post);
+
+function generateTimeTips() {
+  const date = post.data.updateDate ?? dayjs(post.data.publishDate);
+  const prefix = typeof post.data.updateDate === "undefined" ? "发布于" : "更新于";
+  const randomWords = [
+    "时过境迁",
+    "沧海桑田",
+    "天翻地覆",
+    "水流花落",
+    "斗转星移",
+    "物是人非",
+    "时移世易",
+    "物换星移",
+    "春去秋来",
+  ];
+  const randomIndex = Math.floor(Math.random() * randomWords.length);
+
+  return `本文${prefix}${dayjs().diff(date, "day")} 天前，其中的信息可能已经${randomWords[randomIndex]}`;
+}
+---
+
+<Layout title={post.data.title}>
+  <main class="mx-auto max-w-2xl lg:max-w-3xl 2xl:max-w-4xl">
+    <article>
+      <div class="text-center font-serif text-3xl font-bold">{post.data.title}</div>
+
+      <div class="text-neutral mt-4 flex flex-wrap justify-center gap-3 text-sm">
+        <span>
+          <span class="icon-[bx--calendar-alt] iconify-inline"></span>
+          <time>{post.data.publishDate}</time>
+        </span>
+        {post.data.updateDate && (
+          <span>
+            <span class="icon-[bx--calendar-check] iconify-inline" />
+            <time>{post.data.updateDate}</time>
+          </span>
+        )}
+        {post.data.categories && (
+          <span>
+            <span class="icon-[material-symbols--folder-outline-rounded] iconify-inline" />
+            <span class="inline-flex gap-2">
+              {post.data.categories.map((category) => (
+                <a href={getCategoryUrl(category)}>{category}</a>
+              ))}
+            </span>
+          </span>
+        )}
+        {post.data.tags && (
+          <span>
+            <span class="icon-[mdi--tag-outline] iconify-inline" />
+            <span class="inline-flex gap-2">
+              {post.data.tags.map((tag) => (
+                <a href={getTagUrl(tag)}>{tag}</a>
+              ))}
+            </span>
+          </span>
+        )}
+        <span>
+          <span class="icon-[icon-park-outline--word] iconify-inline"></span>
+          <span>{remarkPluginFrontmatter.words}</span>
+        </span>
+        {themeConfig.post.readingTime !== false && (
+          <span>
+            <span class="icon-[mingcute--time-line] iconify-inline"></span>
+            <span>{remarkPluginFrontmatter.readingTime}</span>
+          </span>
+        )}
+      </div>
+
+      <div class="card-shadow card-lg post-time-tips text-neutral my-4 text-sm">
+        {generateTimeTips()}
+      </div>
+
+      <section class="relative mt-8">
+        <div id="post-content">
+          <Content />
+        </div>
+
+        {themeConfig.post.toc !== false && (
+          <aside class="absolute top-0 right-[-160px] hidden h-full w-[120px] md:block">
+            <nav class="active:border-l-primary sticky top-10 pl-4 font-serif text-sm" id="toc">
+              {headings
+                .filter((heading) => heading.depth < 5)
+                .map((heading) => (
+                  <div class={`toc-item-level-${heading.depth}`}>
+                    <a href={`#${heading.slug}`}>{heading.text}</a>
+                  </div>
+                ))}
+            </nav>
+          </aside>
+        )}
+      </section>
+    </article>
+
+    <div class="relative mt-10 mb-8">
+      <div class="flex justify-center gap-4 text-sm">
+        {themeConfig.sponsor.enabled && <Sponsor />}
+      </div>
+    </div>
+
+    <div class="card-shadow card-lg px-6" id="license">
+      <div id="license-icon"></div>
+
+      <div>{post.data.title}</div>
+      <div class="license-item mt-1">{decodeURI(Astro.url.toString())}</div>
+
+      <div class="mt-3 gap-12 sm:flex">
+        <div>
+          <div class="license-item">作者</div>
+          <span>{themeConfig.site.author}</span>
+        </div>
+
+        <div>
+          <div class="license-item">发布于</div>
+          <time>{post.data.publishDate}</time>
+        </div>
+
+        {post.data.updateDate && (
+          <div>
+            <div class="license-item">更新于</div>
+            <time>{post.data.updateDate}</time>
+          </div>
+        )}
+
+        <div>
+          <div class="license-item">许可</div>
+          <div>
+            <a href={themeConfig.post.copyright.url}>
+              <span class="icon-[cib--creative-commons] iconify-inline"></span>
+              {themeConfig.post.copyright.CCLicense.BY && (
+                <span class="icon-[cib--creative-commons-by] iconify-inline" />
+              )}
+              {themeConfig.post.copyright.CCLicense.NC && (
+                <span class="icon-[cib--creative-commons-nc] iconify-inline" />
+              )}
+              {themeConfig.post.copyright.CCLicense.SA && (
+                <span class="icon-[cib--creative-commons-sa] iconify-inline" />
+              )}
+              {themeConfig.post.copyright.CCLicense.ND && (
+                <span class="icon-[cib--creative-commons-nd] iconify-inline" />
+              )}
+              <span class="ml-2">Licensed under CC BY-NC-SA 4.0</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {(post.data.categories || post.data.tags) && (
+        <div class="mt-4 flex justify-between text-sm">
+          <span class="flex gap-2">
+            {post.data.categories &&
+              post.data.categories.map((category) => (
+                <a class="card-shadow-hover card-sm" href={getCategoryUrl(category)}>
+                  <span class="icon-[material-symbols--folder-outline-rounded] iconify-inline" />
+                  <span>{category}</span>
+                </a>
+              ))}
+          </span>
+
+          <span class="flex gap-2">
+            {post.data.tags &&
+              post.data.tags.map((tag) => (
+                <a class="card-shadow-hover card-sm" href={getTagUrl(tag)}>
+                  <span class="icon-[mdi--tag-outline] iconify-inline" />
+                  <span>{tag}</span>
+                </a>
+              ))}
+          </span>
+        </div>
+      )}
+    </div>
+
+    {themeConfig.comment.enabled && themeConfig.comment.artalk.enabled && <Comment />}
+  </main>
+
+  <ToTop client:idle />
+</Layout>
+
+<script>
+  function scrollHighlightTOC() {
+    let activeId = null;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const id = entry.target.getAttribute("id");
+        const link = document.querySelector(`#toc a[href="#${id}"]`);
+        if (!link) return;
+
+        if (entry.isIntersecting && activeId !== id) {
+          if (activeId) {
+            const activeLink = document.querySelector(`#toc a[href="#${activeId}"]`);
+            activeLink?.parentElement?.classList.remove("active");
+          }
+          link.parentElement?.classList.add("active");
+          activeId = id;
+        }
+      });
+    });
+
+    document
+      .querySelectorAll("#post-content h1, #post-content h2, #post-content h3, #post-content h4")
+      .forEach((heading) => observer.observe(heading));
+  }
+
+  function clickHighlightTOC() {
+    document.querySelectorAll("#toc a").forEach((anchor) => {
+      anchor.addEventListener("click", function () {
+        document.querySelectorAll("#toc .active").forEach((element) => {
+          element.classList.remove("active");
+        });
+        anchor.parentElement?.classList.add("active");
+      });
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    scrollHighlightTOC();
+    clickHighlightTOC();
+  });
+</script>
+
+<style>
+  @reference "tailwindcss";
+
+  .post-time-tips {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%230000001a' d='M12 21q-1.875 0-3.512-.712t-2.85-1.925t-1.925-2.85T3 12t.713-3.512t1.924-2.85t2.85-1.925T12 3q2.05 0 3.888.875T19 6.35V5q0-.425.288-.712T20 4t.713.288T21 5v4q0 .425-.288.713T20 10h-4q-.425 0-.712-.288T15 9t.288-.712T16 8h1.75q-1.025-1.4-2.525-2.2T12 5Q9.075 5 7.038 7.038T5 12t2.038 4.963T12 19q2.375 0 4.25-1.425t2.475-3.675q.125-.4.45-.6t.725-.15q.425.05.675.362t.15.688q-.725 2.975-3.15 4.888T12 21m1-9.4l2.5 2.5q.275.275.275.7t-.275.7t-.7.275t-.7-.275l-2.8-2.8q-.15-.15-.225-.337T11 11.975V8q0-.425.288-.712T12 7t.713.288T13 8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right;
+  }
+
+  #license {
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+  }
+
+  #license-icon {
+    position: absolute;
+    top: 50%;
+    right: -2rem;
+    transform: translateY(-50%);
+    height: 12rem;
+    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cg fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round' stroke-width='1'%3E%3Cpath d='M.5 7a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0'/%3E%3Cpath d='M6.046 5.6a1.05 1.05 0 0 0-.99-.7h-.7c-.58 0-1.05.47-1.05 1.05v2.1c0 .58.47 1.05 1.05 1.05h.7c.457 0 .846-.292.99-.7m4.648-2.8a1.05 1.05 0 0 0-.99-.7h-.7c-.58 0-1.05.47-1.05 1.05v2.1c0 .58.47 1.05 1.05 1.05h.7c.457 0 .846-.292.99-.7'/%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.1;
+    z-index: -1;
+  }
+
+  #license .license-item {
+    @apply text-sm;
+    color: var(--color-neutral);
+  }
+
+  #toc a {
+    color: var(--color-neutral);
+    transition: all 200ms ease-in-out;
+  }
+  #toc a:hover {
+    color: black;
+    font-weight: 500;
+  }
+  #toc .active > a {
+    color: black;
+    font-weight: 600;
+  }
+  #toc .active {
+    border-left-color: var(--color-primary);
+    border-start-end-radius: 0.5rem;
+    transition: all 200ms ease-in-out;
+  }
+
+  #toc > div {
+    padding: 0.2rem 0;
+    border-left: 3px solid #efefef;
+  }
+  #toc .toc-item-level-1 {
+    padding-left: 10px;
+  }
+  #toc .toc-item-level-2 {
+    padding-left: calc(10px + 0.6rem);
+  }
+  #toc .toc-item-level-3 {
+    padding-left: calc(10px + 1.2rem);
+  }
+  #toc .toc-item-level-4 {
+    padding-left: calc(10px + 1.8rem);
+  }
+</style>
