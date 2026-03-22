@@ -1,4 +1,4 @@
-baseURL = "https://hhtech.github.io/XingFu-Blog/"
+baseURL = "https://blog.sunmer.top/"
 languageCode = "zh-cn"
 title = "Xing Fu' Blog"
 theme = "hugo-theme-stack"
