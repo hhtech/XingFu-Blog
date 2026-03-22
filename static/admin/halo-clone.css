@@ -1148,6 +1148,110 @@ p {
   border-radius: 10px;
 }
 
+body:has(.articles-grid) .workspace-header,
+body:has(.articles-grid) .notice-banner {
+  display: none;
+}
+
+body:has(.articles-grid) .console-main {
+  padding-top: 12px;
+}
+
+body:has(.articles-grid) .articles-grid {
+  gap: 0;
+  min-height: calc(100vh - 24px);
+  background: #fff;
+  border: 1px solid var(--halo-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+body:has(.articles-grid) .browser-pane,
+body:has(.articles-grid) .editor-pane,
+body:has(.articles-grid) .inspector-pane {
+  min-height: calc(100vh - 24px);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #fff;
+  position: relative;
+  top: 0;
+}
+
+body:has(.articles-grid) .browser-pane {
+  border-right: 1px solid var(--halo-border);
+}
+
+body:has(.articles-grid) .inspector-pane {
+  border-left: 1px solid var(--halo-border);
+}
+
+body:has(.articles-grid) .browser-pane > .secondary-button.wide-button {
+  width: auto;
+  align-self: flex-start;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+body:has(.articles-grid) .editor-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 12px 18px 10px;
+}
+
+body:has(.articles-grid) .editor-chips .chip:nth-child(n + 3) {
+  display: none;
+}
+
+body:has(.articles-grid) .editor-body {
+  padding: 0;
+  background: #fff;
+}
+
+body:has(.articles-grid) .markdown-composer {
+  gap: 0;
+}
+
+body:has(.articles-grid) .editor-assistbar {
+  border-width: 0 0 1px;
+  border-radius: 0;
+  padding: 10px 18px;
+  background: #fff;
+}
+
+body:has(.articles-grid) .composer-shell {
+  border: 0;
+  border-radius: 0;
+}
+
+body:has(.articles-grid) .composer-toolbar {
+  padding: 8px 14px;
+  background: #fbfcfe;
+}
+
+body:has(.articles-grid) .tiptap-editor,
+body:has(.articles-grid) .tiptap-preview {
+  width: min(100%, 760px);
+  padding: 34px 40px 56px;
+}
+
+body:has(.articles-grid) .active-filter-banner,
+body:has(.articles-grid) .empty-card {
+  border-radius: 10px;
+}
+
+body:has(.articles-grid) .inspector-pane label > span {
+  font-size: 11px;
+}
+
+body:has(.articles-grid) .inspector-pane input,
+body:has(.articles-grid) .inspector-pane textarea,
+body:has(.articles-grid) .inspector-pane select {
+  min-height: 36px;
+  border-radius: 8px;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
