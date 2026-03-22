@@ -1786,6 +1786,26 @@ body.halo-demo-active .console-main > :not(.halo-demo-root) {
   font-size: 12px;
 }
 
+.halo-demo-chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.halo-demo-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid var(--halo-border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .halo-demo-formatbar {
   display: flex;
   flex-wrap: wrap;
@@ -1876,6 +1896,12 @@ body.halo-demo-active .console-main > :not(.halo-demo-root) {
 
 .halo-demo-sidepanel.active {
   display: grid;
+}
+
+.halo-demo-detailgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .halo-demo-outline-item,

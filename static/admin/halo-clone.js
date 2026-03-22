@@ -131,7 +131,7 @@
     applying: false,
     requestedView: null,
     demoMode: "list",
-    demoSelectedSlug: demoPosts[0].slug,
+    demoSelectedSlug: "ce-shi",
     demoSearch: "",
     demoTab: "outline",
   };
@@ -557,6 +557,13 @@
     const editorText = escapeHtml(post.body)
       .replace(/\n{2,}/g, "\n\n")
       .replace(/\n/g, "<br>");
+    const metaChips = []
+      .concat(post.categories.map((item) => `分类 · ${item}`))
+      .concat(post.tags.map((item) => `标签 · ${item}`))
+      .concat(post.draft ? ["状态 · 草稿"] : ["状态 · 已发布"])
+      .slice(0, 4)
+      .map((item) => `<span class="halo-demo-chip">${escapeHtml(item)}</span>`)
+      .join("");
 
     return `
       <div class="halo-demo-pagehead">
@@ -581,6 +588,9 @@
               <span>编辑</span>
             </div>
             <input class="halo-demo-titleinput" type="text" value="${escapeHtml(post.title)}" />
+            <div class="halo-demo-chiprow">
+              ${metaChips}
+            </div>
             <div class="halo-demo-submeta">
               <span>发布时间 ${escapeHtml(formatDateTime(post.publishDate))}</span>
               <span>更新于 ${escapeHtml(formatDateTime(post.updateDate || post.publishDate))}</span>
@@ -627,6 +637,16 @@
             <div class="halo-demo-detailgroup">
               <span class="halo-demo-detaillabel">文章摘要</span>
               <div class="halo-demo-detailvalue">${escapeHtml(post.summary || "暂无摘要")}</div>
+            </div>
+            <div class="halo-demo-detailgrid">
+              <div class="halo-demo-detailgroup">
+                <span class="halo-demo-detaillabel">发布时间</span>
+                <div class="halo-demo-detailvalue">${escapeHtml(formatDate(post.publishDate))}</div>
+              </div>
+              <div class="halo-demo-detailgroup">
+                <span class="halo-demo-detaillabel">最近更新</span>
+                <div class="halo-demo-detailvalue">${escapeHtml(formatDate(post.updateDate || post.publishDate))}</div>
+              </div>
             </div>
             <div class="halo-demo-detailgroup">
               <span class="halo-demo-detaillabel">分类</span>
@@ -740,7 +760,7 @@
 
     if (!state.openFirstApplied && openFirst && state.requestedView === "articles") {
       state.demoMode = "editor";
-      state.demoSelectedSlug = demoPosts[0].slug;
+      state.demoSelectedSlug = "ce-shi";
       state.openFirstApplied = true;
     }
   }
