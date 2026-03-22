@@ -1,8 +1,12 @@
 name = "xingfu-blog-auth"
 main = "src/index.js"
 compatibility_date = "2026-03-22"
-workers_dev = true
+workers_dev = false
 
 [vars]
-ALLOWED_ORIGINS = "https://hhtech.github.io"
+ALLOWED_ORIGINS = "https://hhtech.github.io,https://blog.sunmer.top"
 GITHUB_SCOPE = "public_repo"
+
+[[routes]]
+pattern = "auth.sunmer.top"
+custom_domain = true
