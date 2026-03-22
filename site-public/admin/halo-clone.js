@@ -44,6 +44,8 @@
     articleSearch: "",
     articleInspectorTab: "outline",
     articleNotice: "",
+    articleError: "",
+    articleSavingAction: "",
   };
 
   const articleSource = {
@@ -52,6 +54,8 @@
     branch: "main",
     dir: "src/content/posts",
   };
+  const settingsStorageKey = "blog-admin-settings";
+  const tokenStorageKey = "blog-admin-token";
 
   function buttonText(button) {
     return button ? button.textContent.replace(/\s+/g, " ").trim() : "";
@@ -105,8 +109,9 @@
   }
 
   function parseFrontmatter(markdown) {
-    const match = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
-    if (!match) return { attributes: {}, body: markdown };
+    const normalizedMarkdown = String(markdown || "").replace(/^\uFEFF/, "");
+    const match = normalizedMarkdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+    if (!match) return { attributes: {}, body: normalizedMarkdown };
 
     const attributes = {};
     let currentArrayKey = "";
@@ -136,7 +141,7 @@
 
     return {
       attributes,
-      body: markdown.slice(match[0].length),
+      body: normalizedMarkdown.slice(match[0].length),
     };
   }
 
@@ -209,31 +214,320 @@
     ).padStart(2, "0")}`;
   }
 
-  function articleUrl(slug) {
-    return `https://api.github.com/repos/${articleSource.owner}/${articleSource.repo}/contents/${
-      articleSource.dir
-    }/${slug}.md?ref=${articleSource.branch}`;
+  function formatDateTimeLocal(dateValue) {
+    const parsed = dateValue ? new Date(dateValue) : new Date();
+    if (Number.isNaN(parsed.getTime())) return "";
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const day = String(parsed.getDate()).padStart(2, "0");
+    const hours = String(parsed.getHours()).padStart(2, "0");
+    const minutes = String(parsed.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 
-  async function fetchText(url) {
+  function encodeRepoPath(path) {
+    return path
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+  }
+
+  function defaultArticleSettings() {
+    return {
+      owner: articleSource.owner,
+      repo: articleSource.repo,
+      branch: articleSource.branch,
+      contentRoot: articleSource.dir,
+      pageRoot: "src/content/pages",
+      uploadRoot: "site-public/upload",
+      configPath: "src/config/theme.yaml",
+      paramsPath: "src/config/theme.yaml",
+      menuPath: "src/config/theme.yaml",
+      authBaseUrl: "https://auth.sunmer.top",
+    };
+  }
+
+  function normalizeArticleSettings(value) {
+    const defaults = defaultArticleSettings();
+    const legacyMap = new Map([
+      ["content/post", defaults.contentRoot],
+      ["config/_default/config.toml", defaults.configPath],
+      ["content/page", defaults.pageRoot],
+      ["static/upload", defaults.uploadRoot],
+      ["config/_default/params.toml", defaults.paramsPath],
+      ["config/_default/menu.toml", defaults.menuPath],
+    ]);
+
+    const normalized = { ...defaults, ...(value || {}) };
+    ["contentRoot", "pageRoot", "uploadRoot", "configPath", "paramsPath", "menuPath"].forEach((key) => {
+      const current = String(normalized[key] || "").trim();
+      normalized[key] = current ? legacyMap.get(current) || current : defaults[key];
+    });
+    normalized.authBaseUrl = String(normalized.authBaseUrl || "").trim() || defaults.authBaseUrl;
+    return normalized;
+  }
+
+  function getStoredArticleSettings() {
+    try {
+      const raw = window.localStorage.getItem(settingsStorageKey);
+      return raw ? normalizeArticleSettings(JSON.parse(raw)) : defaultArticleSettings();
+    } catch {
+      return defaultArticleSettings();
+    }
+  }
+
+  function getStoredArticleToken() {
+    try {
+      return window.localStorage.getItem(tokenStorageKey) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function utf8ToBase64(value) {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return window.btoa(binary);
+  }
+
+  function base64ToUtf8(value) {
+    const binary = window.atob(value.replace(/\n/g, ""));
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  function csvToList(value) {
+    return String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function normalizeArrayValue(value) {
+    if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+    if (typeof value === "string") return csvToList(value);
+    if (value === undefined || value === null || value === "") return [];
+    return [String(value).trim()].filter(Boolean);
+  }
+
+  function normalizeArticleBody(body) {
+    const normalized = String(body || "").replace(/^\uFEFF/, "").trim();
+    if (!normalized) return "<p></p>";
+    return /<[a-z][\s\S]*>/i.test(normalized) ? normalized : markdownToHtml(normalized);
+  }
+
+  function editorBodyHtml(html) {
+    const normalized = String(html || "").trim();
+    return normalized || "<p></p>";
+  }
+
+  function articleStatusText(draft) {
+    return draft ? "草稿" : "已发布";
+  }
+
+  function articleSortValue(post) {
+    return String(post.updateDate || post.publishDate || post.date || "");
+  }
+
+  function sanitizeArticleSlug(value) {
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^\w\u4e00-\u9fa5-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    return normalized || `draft-${Date.now()}`;
+  }
+
+  function normalizeArticleRecord(post) {
+    const publishDate = post.publishDate || post.date || new Date().toISOString();
+    const updateDate = post.updateDate || publishDate;
+    const html = normalizeArticleBody(post.html || post.rawBody || "");
+    const plainText = post.plainText || stripHtml(html);
+    const draft = typeof post.draft === "boolean" ? post.draft : post.status === "草稿";
+
+    return {
+      ...post,
+      slug: sanitizeArticleSlug(post.slug || post.title),
+      title: String(post.title || post.slug || "未命名文章").trim() || "未命名文章",
+      publishDate,
+      updateDate,
+      date: publishDate,
+      dateLabel: formatDate(updateDate || publishDate),
+      draft,
+      status: articleStatusText(draft),
+      author: post.author || "XF",
+      description: String(post.description || "").trim(),
+      keywords: normalizeArrayValue(post.keywords),
+      aliases: normalizeArrayValue(post.aliases),
+      weight: post.weight || "",
+      coverImage: String(post.coverImage || post.cover || "").trim(),
+      tags: normalizeArrayValue(post.tags),
+      categories: normalizeArrayValue(post.category || post.categories),
+      html,
+      rawBody: post.rawBody || html,
+      plainText,
+      excerpt: post.excerpt || plainText.slice(0, 90),
+      outline: Array.isArray(post.outline) ? post.outline : collectOutline(html),
+      sha: post.sha || "",
+      path: post.path || "",
+    };
+  }
+
+  function yamlString(value) {
+    return JSON.stringify(String(value));
+  }
+
+  function htmlToMarkdown(html) {
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    function serializeChildren(node) {
+      return Array.from(node.childNodes)
+        .map((child, index) => serializeNode(child, index))
+        .join("");
+    }
+
+    function serializeNode(node, index) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent.replace(/\u00a0/g, " ");
+      }
+
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return "";
+      }
+
+      const tag = node.tagName.toLowerCase();
+      const content = serializeChildren(node).trim();
+
+      switch (tag) {
+        case "h1":
+          return `# ${content}\n\n`;
+        case "h2":
+          return `## ${content}\n\n`;
+        case "h3":
+          return `### ${content}\n\n`;
+        case "p":
+          return `${content}\n\n`;
+        case "br":
+          return "\n";
+        case "strong":
+        case "b":
+          return `**${content}**`;
+        case "em":
+        case "i":
+          return `*${content}*`;
+        case "u":
+          return content;
+        case "code":
+          return node.parentElement?.tagName.toLowerCase() === "pre" ? node.textContent : `\`${content}\``;
+        case "pre":
+          return `\`\`\`\n${node.textContent.trim()}\n\`\`\`\n\n`;
+        case "blockquote":
+          return `${content
+            .split(/\n+/)
+            .map((line) => `> ${line}`)
+            .join("\n")}\n\n`;
+        case "ul":
+          return `${Array.from(node.children)
+            .map((child) => `- ${serializeChildren(child).trim()}`)
+            .join("\n")}\n\n`;
+        case "ol":
+          return `${Array.from(node.children)
+            .map((child, itemIndex) => `${itemIndex + 1}. ${serializeChildren(child).trim()}`)
+            .join("\n")}\n\n`;
+        case "a":
+          return `[${content || node.getAttribute("href") || ""}](${node.getAttribute("href") || "#"})`;
+        case "img":
+          return `![${node.getAttribute("alt") || ""}](${node.getAttribute("src") || ""})\n\n`;
+        case "hr":
+          return `---\n\n`;
+        case "div":
+        case "section":
+          return `${serializeChildren(node)}${tag === "div" && index < node.parentNode.childNodes.length - 1 ? "\n" : ""}`;
+        default:
+          return serializeChildren(node);
+      }
+    }
+
+    return serializeChildren(container).replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  function buildArticleMarkdown(post) {
+    const publishDate = post.publishDate || post.date || new Date().toISOString();
+    const updateDate = post.updateDate || new Date().toISOString();
+    const lines = [
+      "---",
+      `title: ${yamlString(post.title || post.slug || "未命名文章")}`,
+      `slug: ${yamlString(post.slug)}`,
+      `publishDate: ${yamlString(publishDate)}`,
+      `updateDate: ${yamlString(updateDate)}`,
+      `draft: ${post.draft ? "true" : "false"}`,
+    ];
+
+    if (post.description) lines.push(`description: ${yamlString(post.description)}`);
+    if (post.categories?.length) {
+      lines.push("categories:");
+      post.categories.forEach((item) => lines.push(`  - ${yamlString(item)}`));
+    }
+    if (post.tags?.length) {
+      lines.push("tags:");
+      post.tags.forEach((item) => lines.push(`  - ${yamlString(item)}`));
+    }
+    if (post.keywords?.length) lines.push(`keywords: [${post.keywords.map(yamlString).join(", ")}]`);
+    if (post.aliases?.length) lines.push(`aliases: [${post.aliases.map(yamlString).join(", ")}]`);
+    if (post.weight) lines.push(`weight: ${post.weight}`);
+    if (post.coverImage) lines.push(`cover: ${yamlString(post.coverImage)}`);
+
+    lines.push("---", "", editorBodyHtml(post.html), "");
+    return lines.join("\n");
+  }
+
+  function buildArticlePath(root, slug) {
+    return `${String(root || articleSource.dir).replace(/\/$/, "")}/${slug}.md`;
+  }
+
+  async function fetchText(url, token = "") {
+    const headers = {
+      Accept: "application/vnd.github+json",
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
     const response = await fetch(url, {
-      headers: {
-        Accept: "application/vnd.github+json",
-      },
+      headers,
     });
 
     if (!response.ok) {
-      throw new Error(`GitHub API ${response.status}`);
+      let message = `GitHub API ${response.status}`;
+      try {
+        const payload = await response.json();
+        if (payload?.message) {
+          message = `${message}: ${payload.message}`;
+        }
+      } catch {}
+      throw new Error(message);
     }
 
     return response.text();
   }
 
-  async function fetchJson(url) {
+  async function fetchJson(url, token = "", init = {}) {
+    const headers = {
+      Accept: "application/vnd.github+json",
+      ...(init.headers || {}),
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (init.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+
     const response = await fetch(url, {
-      headers: {
-        Accept: "application/vnd.github+json",
-      },
+      ...init,
+      headers,
+      body: init.body && typeof init.body !== "string" ? JSON.stringify(init.body) : init.body,
     });
 
     if (!response.ok) {
@@ -276,6 +570,7 @@
     state.articleMode = mode;
     state.articleSelectedSlug = slug;
     state.articleNotice = "";
+    state.articleError = "";
     syncArticleQuery();
     renderArticlesWorkspace();
   }
@@ -311,25 +606,30 @@
 
     try {
       let posts = [];
+      const token = getStoredArticleToken();
+      const settings = getStoredArticleSettings();
 
-      try {
-        posts = await fetchJson("./articles-index.json");
-      } catch (indexError) {
-        const encodedDir = articleSource.dir
-          .split("/")
-          .map((segment) => encodeURIComponent(segment))
-          .join("/");
+      if (token) {
         const files = await fetchJson(
-          `https://api.github.com/repos/${articleSource.owner}/${articleSource.repo}/contents/${encodedDir}?ref=${articleSource.branch}`
+          `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodeRepoPath(
+            settings.contentRoot
+          )}?ref=${encodeURIComponent(settings.branch)}`,
+          token
         );
 
         const markdownFiles = files.filter((item) => item.type === "file" && /\.md$/i.test(item.name));
         posts = await Promise.all(
           markdownFiles.map(async (item) => {
-            const markdown = await fetchText(item.download_url);
+            const detail = await fetchJson(
+              `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodeRepoPath(
+                item.path
+              )}?ref=${encodeURIComponent(settings.branch)}`,
+              token
+            );
+            const markdown = base64ToUtf8(detail.content || "");
             const parsed = parseFrontmatter(markdown);
             const title = parsed.attributes.title || slugifyFileName(item.name);
-            const html = markdownToHtml(parsed.body);
+            const html = normalizeArticleBody(parsed.body);
             const plainText = stripHtml(html);
             const tags = Array.isArray(parsed.attributes.tags)
               ? parsed.attributes.tags
@@ -347,15 +647,30 @@
               : [];
 
             return {
-              slug: slugifyFileName(item.name),
-              path: item.path,
+              slug: parsed.attributes.slug || slugifyFileName(item.name),
+              path: detail.path,
+              sha: detail.sha,
               title,
-              date: parsed.attributes.date || item.name,
-              dateLabel: formatDate(parsed.attributes.date || ""),
+              publishDate: parsed.attributes.publishDate || parsed.attributes.date || new Date().toISOString(),
+              updateDate: parsed.attributes.updateDate || parsed.attributes.lastmod || parsed.attributes.publishDate || "",
+              draft: !!parsed.attributes.draft,
               status: parsed.attributes.draft ? "草稿" : "已发布",
               author: "XF",
               tags,
               categories,
+              description: parsed.attributes.description || "",
+              keywords: Array.isArray(parsed.attributes.keywords)
+                ? parsed.attributes.keywords
+                : parsed.attributes.keywords
+                ? [parsed.attributes.keywords]
+                : [],
+              aliases: Array.isArray(parsed.attributes.aliases)
+                ? parsed.attributes.aliases
+                : parsed.attributes.aliases
+                ? [parsed.attributes.aliases]
+                : [],
+              weight: parsed.attributes.weight || "",
+              coverImage: parsed.attributes.cover || "",
               excerpt: plainText.slice(0, 90),
               html,
               plainText,
@@ -364,6 +679,8 @@
             };
           })
         );
+      } else {
+        posts = await fetchJson("./articles-index.json");
       }
 
       state.articlePosts = posts
@@ -374,10 +691,21 @@
           excerpt: post.excerpt || stripHtml(post.html || "").slice(0, 90),
           dateLabel: post.dateLabel || formatDate(post.date || ""),
           author: post.author || "XF",
+          draft: typeof post.draft === "boolean" ? post.draft : post.status === "草稿",
+          description: post.description || "",
+          keywords: Array.isArray(post.keywords) ? post.keywords : [],
+          aliases: Array.isArray(post.aliases) ? post.aliases : [],
+          weight: post.weight || "",
+          coverImage: post.coverImage || "",
           tags: Array.isArray(post.tags) ? post.tags : [],
           categories: Array.isArray(post.categories) ? post.categories : [],
+          status:
+            post.status || (typeof post.draft === "boolean" ? (post.draft ? "草稿" : "已发布") : "已发布"),
         }))
         .sort((left, right) => String(right.date).localeCompare(String(left.date)));
+      state.articlePosts = state.articlePosts
+        .map((post) => normalizeArticleRecord(post))
+        .sort((left, right) => articleSortValue(right).localeCompare(articleSortValue(left)));
       state.articleDataLoaded = true;
       applyArticleQueryState();
       syncArticleQuery();
@@ -540,6 +868,53 @@
       </section>`;
   }
 
+  function articleDetailsPanelHtml(post) {
+    return `
+      <div class="halo-article-meta-group">
+        <label><span>Slug</span><input value="${escapeHtml(post.slug)}" ${post.path ? "readonly" : ""} data-article-input="slug" /></label>
+        <label><span>发布时间</span><input type="datetime-local" value="${escapeHtml(formatDateTimeLocal(post.publishDate || post.date))}" data-article-input="publishDate" /></label>
+      </div>
+      <label><span>分类</span><input value="${escapeHtml(post.categories.join(", "))}" placeholder="默认分类, 诗词" data-article-input="categories" /></label>
+      <label><span>标签</span><input value="${escapeHtml(post.tags.join(", "))}" placeholder="Halo, 随笔" data-article-input="tags" /></label>
+      <label><span>封面</span><input value="${escapeHtml(post.coverImage || "")}" placeholder="https://..." data-article-input="coverImage" /></label>
+      <label><span>关键词</span><input value="${escapeHtml(post.keywords.join(", "))}" placeholder="关键词 1, 关键词 2" data-article-input="keywords" /></label>
+      <label><span>别名</span><input value="${escapeHtml(post.aliases.join(", "))}" placeholder="/posts/demo" data-article-input="aliases" /></label>
+      <label><span>权重</span><input type="number" value="${escapeHtml(String(post.weight || ""))}" placeholder="0" data-article-input="weight" /></label>
+      <label><span>文章摘要</span><textarea class="summary-textarea" placeholder="这里会写入 frontmatter description" data-article-input="description">${escapeHtml(post.description || "")}</textarea></label>`;
+  }
+
+  function syncArticleEditorChrome(root, post) {
+    if (!root || !post || state.articleMode !== "editor") return;
+
+    const actionButtons = root.querySelectorAll(".halo-article-page-actions button");
+    const saveButton = actionButtons[2];
+    const publishButton = actionButtons[actionButtons.length - 1];
+    const saveLabel = state.articleSavingAction === "save" ? "保存中..." : "保存";
+    const publishLabel = state.articleSavingAction === "publish" ? "发布中..." : "发布";
+    const isSaving = !!state.articleSavingAction;
+
+    if (saveButton) {
+      saveButton.dataset.articleAction = "save";
+      saveButton.dataset.notice = "";
+      saveButton.textContent = saveLabel;
+      saveButton.disabled = isSaving;
+    }
+
+    if (publishButton) {
+      publishButton.dataset.articleAction = "publish";
+      publishButton.dataset.notice = "";
+      publishButton.textContent = publishLabel;
+      publishButton.disabled = isSaving;
+    }
+
+    if (state.articleInspectorTab === "details") {
+      const sidebarBody = root.querySelector(".halo-editor-sidebar-body");
+      if (sidebarBody) {
+        sidebarBody.innerHTML = articleDetailsPanelHtml(post);
+      }
+    }
+  }
+
   function renderArticlesWorkspace() {
     const main = document.querySelector(".console-main");
     if (!main) return;
@@ -572,13 +947,15 @@
     }
 
     const post = currentArticle();
-    const banner = state.articleNotice
-      ? `<div class="notice-banner success-banner halo-article-banner">${escapeHtml(state.articleNotice)}</div>`
-      : "";
+    const banner = [
+      state.articleError ? `<div class="notice-banner error-banner halo-article-banner">${escapeHtml(state.articleError)}</div>` : "",
+      state.articleNotice ? `<div class="notice-banner success-banner halo-article-banner">${escapeHtml(state.articleNotice)}</div>` : "",
+    ].join("");
 
     root.innerHTML =
       banner +
       (state.articleMode === "editor" && post ? articleEditorViewHtml(post) : articleListViewHtml());
+    syncArticleEditorChrome(root, post);
   }
 
   function updateArticleSnapshotFromDom() {
@@ -586,14 +963,129 @@
     const root = document.querySelector(".halo-articles-root");
     if (!post || !root) return;
 
+    const previousSlug = post.slug;
     const titleInput = root.querySelector(".halo-article-title-input");
     const editorCanvas = root.querySelector(".halo-article-editor-canvas");
+    const slugInput = root.querySelector('[data-article-input="slug"]');
+    const publishDateInput = root.querySelector('[data-article-input="publishDate"]');
+    const categoriesInput = root.querySelector('[data-article-input="categories"]');
+    const tagsInput = root.querySelector('[data-article-input="tags"]');
+    const coverImageInput = root.querySelector('[data-article-input="coverImage"]');
+    const keywordsInput = root.querySelector('[data-article-input="keywords"]');
+    const aliasesInput = root.querySelector('[data-article-input="aliases"]');
+    const weightInput = root.querySelector('[data-article-input="weight"]');
+    const descriptionInput = root.querySelector('[data-article-input="description"]');
+    if (titleInput) post.title = titleInput.value.trim() || "未命名文章";
+    if (slugInput && !post.path) {
+      post.slug = sanitizeArticleSlug(slugInput.value || previousSlug);
+      if (state.articleSelectedSlug === previousSlug) {
+        state.articleSelectedSlug = post.slug;
+      }
+    }
+    if (publishDateInput?.value) {
+      const parsedDate = new Date(publishDateInput.value);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        post.publishDate = parsedDate.toISOString();
+      }
+    }
+    if (categoriesInput) post.categories = csvToList(categoriesInput.value);
+    if (tagsInput) post.tags = csvToList(tagsInput.value);
+    if (coverImageInput) post.coverImage = coverImageInput.value.trim();
+    if (keywordsInput) post.keywords = csvToList(keywordsInput.value);
+    if (aliasesInput) post.aliases = csvToList(aliasesInput.value);
+    if (weightInput) post.weight = weightInput.value.trim();
+    if (descriptionInput) post.description = descriptionInput.value.trim();
     if (titleInput) post.title = titleInput.value.trim() || "未命名文章";
     if (editorCanvas) {
-      post.html = editorCanvas.innerHTML;
+      post.html = editorBodyHtml(editorCanvas.innerHTML);
       post.plainText = editorCanvas.innerText.replace(/\s+/g, " ").trim();
-      post.excerpt = post.plainText.slice(0, 90);
+      post.excerpt = (post.description || post.plainText).slice(0, 90);
       post.outline = collectOutline(post.html);
+    }
+    post.date = post.publishDate || post.date || new Date().toISOString();
+    post.updateDate = new Date().toISOString();
+    post.dateLabel = formatDate(post.updateDate || post.date);
+    post.status = articleStatusText(!!post.draft);
+  }
+
+  async function saveArticleToGitHub(mode) {
+    const post = currentArticle();
+    if (!post || state.articleSavingAction) return;
+
+    state.articleError = "";
+    state.articleNotice = "";
+    updateArticleSnapshotFromDom();
+
+    const token = getStoredArticleToken();
+    if (!token) {
+      state.articleError = "未检测到 GitHub Token，请先在设置或登录区域完成仓库授权。";
+      renderArticlesWorkspace();
+      return;
+    }
+
+    post.slug = sanitizeArticleSlug(post.slug || post.title);
+    if (state.articlePosts.some((item) => item !== post && item.slug === post.slug)) {
+      state.articleError = `Slug ${post.slug} 已存在，请换一个。`;
+      renderArticlesWorkspace();
+      return;
+    }
+
+    const settings = getStoredArticleSettings();
+    const targetPath = buildArticlePath(settings.contentRoot, post.slug);
+    if (post.path && post.path !== targetPath) {
+      state.articleError = "暂不支持直接修改已存在文章的 slug，请保持原 slug 或新建文章。";
+      renderArticlesWorkspace();
+      return;
+    }
+
+    state.articleSavingAction = mode;
+    renderArticlesWorkspace();
+
+    try {
+      const desiredDraft = mode === "publish" ? false : !!post.draft;
+      const publishDate = post.publishDate || post.date || new Date().toISOString();
+      const updateDate = new Date().toISOString();
+      const nextPost = normalizeArticleRecord({
+        ...post,
+        draft: desiredDraft,
+        publishDate,
+        updateDate,
+        path: post.path || targetPath,
+        html: post.html,
+      });
+      const markdown = buildArticleMarkdown(nextPost);
+      const response = await fetchJson(
+        `https://api.github.com/repos/${settings.owner}/${settings.repo}/contents/${encodeRepoPath(targetPath)}`,
+        token,
+        {
+          method: "PUT",
+          body: {
+            message: `${mode === "publish" ? "publish" : "save"} article: ${nextPost.slug}`,
+            content: utf8ToBase64(markdown),
+            branch: settings.branch,
+            ...(post.sha ? { sha: post.sha } : {}),
+          },
+        }
+      );
+
+      const savedPost = normalizeArticleRecord({
+        ...nextPost,
+        sha: response?.content?.sha || nextPost.sha,
+        path: response?.content?.path || targetPath,
+      });
+      Object.assign(post, savedPost);
+      state.articlePosts = state.articlePosts
+        .map((item) => (item === post ? savedPost : item))
+        .sort((left, right) => articleSortValue(right).localeCompare(articleSortValue(left)));
+      state.articleSelectedSlug = savedPost.slug;
+      state.articleNotice = mode === "publish" ? "文章已发布并提交到 GitHub。" : "文章已保存到 GitHub。";
+      state.articleError = "";
+      syncArticleQuery();
+    } catch (error) {
+      state.articleError = error instanceof Error ? error.message : "文章保存失败";
+    } finally {
+      state.articleSavingAction = "";
+      renderArticlesWorkspace();
     }
   }
 
@@ -648,11 +1140,19 @@
       return;
     }
 
+    if (action === "save" || action === "publish") {
+      void saveArticleToGitHub(action);
+      return;
+    }
+
     if (action === "new-post") {
       const slug = `draft-${Date.now()}`;
-      const post = {
+      const post = normalizeArticleRecord({
         slug,
         path: "",
+        draft: true,
+        publishDate: new Date().toISOString(),
+        updateDate: new Date().toISOString(),
         title: "未命名文章",
         date: new Date().toISOString(),
         dateLabel: formatDate(new Date().toISOString()),
@@ -665,7 +1165,7 @@
         plainText: "",
         outline: [],
         rawBody: "",
-      };
+      });
       state.articlePosts.unshift(post);
       setArticleMode("editor", slug);
       return;
@@ -696,7 +1196,19 @@
       return;
     }
 
-    if (inputType === "title" || inputType === "body") {
+    if (
+      inputType === "title" ||
+      inputType === "body" ||
+      inputType === "slug" ||
+      inputType === "publishDate" ||
+      inputType === "categories" ||
+      inputType === "tags" ||
+      inputType === "coverImage" ||
+      inputType === "keywords" ||
+      inputType === "aliases" ||
+      inputType === "weight" ||
+      inputType === "description"
+    ) {
       updateArticleSnapshotFromDom();
     }
   }

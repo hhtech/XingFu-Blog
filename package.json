@@ -4,8 +4,8 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro build && astro preview",
+    "build": "node tools/generate-admin-articles-index.mjs && astro build",
+    "preview": "node tools/generate-admin-articles-index.mjs && astro build && astro preview",
     "astro": "astro",
     "init": "esno scripts/init.ts"
   },
