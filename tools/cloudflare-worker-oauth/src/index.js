@@ -17,6 +17,13 @@ function createNoStoreHeaders(init = {}) {
   return headers
 }
 
+function setCorsHeaders(headers, origin) {
+  if (!origin) return headers
+  headers.set('Access-Control-Allow-Origin', origin)
+  headers.set('Vary', 'Origin')
+  return headers
+}
+
 function jsonResponse(data, status = 200, init = {}) {
   const headers = createNoStoreHeaders(init.headers)
   headers.set('Content-Type', 'application/json; charset=UTF-8')
@@ -99,6 +106,15 @@ function sanitizeReturnTo(returnTo, origin) {
   }
 }
 
+function getValidatedRequestOrigin(request, env, fallbackOrigin = '') {
+  const allowedOrigins = getAllowedOrigins(env)
+  const requestOrigin = request.headers.get('Origin') || fallbackOrigin
+  if (!requestOrigin || !isAllowedOrigin(requestOrigin, allowedOrigins)) {
+    return ''
+  }
+  return requestOrigin
+}
+
 function renderResultPage({ origin, payload, returnTo }) {
   const serializedPayload = JSON.stringify(payload)
   const serializedOrigin = JSON.stringify(origin)
@@ -109,7 +125,7 @@ function renderResultPage({ origin, payload, returnTo }) {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GitHub 登录</title>
+    <title>GitHub Login</title>
     <style>
       body {
         margin: 0;
@@ -135,7 +151,7 @@ function renderResultPage({ origin, payload, returnTo }) {
   <body>
     <main>
       <h1>${payload.type === 'success' ? 'GitHub 登录成功' : 'GitHub 登录失败'}</h1>
-      <p id="message">${payload.type === 'success' ? '正在返回后台并完成登录。' : payload.error}</p>
+      <p id="message">${payload.type === 'success' ? '正在返回后台页面。' : payload.error}</p>
     </main>
     <script>
       const payload = ${serializedPayload};
@@ -207,27 +223,36 @@ async function handleCallback(request, env) {
   clearCookie(headers, RETURN_TO_COOKIE)
 
   if (!origin) {
-    return htmlResponse(renderResultPage({
-      origin: requestUrl.origin,
-      returnTo,
-      payload: { source: MESSAGE_SOURCE, type: 'error', error: 'OAuth 会话已失效，请重新登录。' },
-    }), headers)
+    return htmlResponse(
+      renderResultPage({
+        origin: requestUrl.origin,
+        returnTo,
+        payload: { source: MESSAGE_SOURCE, type: 'error', error: 'OAuth session expired. Please try again.' },
+      }),
+      headers,
+    )
   }
 
   if (error) {
-    return htmlResponse(renderResultPage({
-      origin,
-      returnTo,
-      payload: { source: MESSAGE_SOURCE, type: 'error', error: `GitHub 授权失败：${error}` },
-    }), headers)
+    return htmlResponse(
+      renderResultPage({
+        origin,
+        returnTo,
+        payload: { source: MESSAGE_SOURCE, type: 'error', error: `GitHub authorization failed: ${error}` },
+      }),
+      headers,
+    )
   }
 
   if (!state || state !== cookies[STATE_COOKIE] || !code) {
-    return htmlResponse(renderResultPage({
-      origin,
-      returnTo,
-      payload: { source: MESSAGE_SOURCE, type: 'error', error: 'GitHub 回调校验失败，请重新登录。' },
-    }), headers)
+    return htmlResponse(
+      renderResultPage({
+        origin,
+        returnTo,
+        payload: { source: MESSAGE_SOURCE, type: 'error', error: 'GitHub callback validation failed.' },
+      }),
+      headers,
+    )
   }
 
   const callbackUrl = buildCallbackUrl(requestUrl)
@@ -247,19 +272,157 @@ async function handleCallback(request, env) {
 
   const tokenPayload = await tokenResponse.json()
   if (!tokenResponse.ok || !tokenPayload.access_token) {
-    const message = tokenPayload.error_description || tokenPayload.error || 'GitHub token 交换失败。'
-    return htmlResponse(renderResultPage({
-      origin,
-      returnTo,
-      payload: { source: MESSAGE_SOURCE, type: 'error', error: message },
-    }), headers)
+    const message = tokenPayload.error_description || tokenPayload.error || 'GitHub token exchange failed.'
+    return htmlResponse(
+      renderResultPage({
+        origin,
+        returnTo,
+        payload: { source: MESSAGE_SOURCE, type: 'error', error: message },
+      }),
+      headers,
+    )
   }
 
-  return htmlResponse(renderResultPage({
-    origin,
-    returnTo,
-    payload: { source: MESSAGE_SOURCE, type: 'success', token: tokenPayload.access_token },
-  }), headers)
+  return htmlResponse(
+    renderResultPage({
+      origin,
+      returnTo,
+      payload: { source: MESSAGE_SOURCE, type: 'success', token: tokenPayload.access_token },
+    }),
+    headers,
+  )
+}
+
+async function handleDeviceStart(request, env) {
+  const requestUrl = new URL(request.url)
+  const origin = requestUrl.searchParams.get('origin') || ''
+  const allowedOrigins = getAllowedOrigins(env)
+
+  if (!origin || !isAllowedOrigin(origin, allowedOrigins)) {
+    return textResponse('Origin is not allowed.', 400)
+  }
+
+  const corsOrigin = getValidatedRequestOrigin(request, env, origin)
+  if (!corsOrigin) {
+    return textResponse('Origin is not allowed.', 400)
+  }
+
+  const githubClientId = assertEnv(env, 'GITHUB_CLIENT_ID')
+  const scope = String(env.GITHUB_SCOPE || 'public_repo').trim() || 'public_repo'
+
+  const response = await fetch('https://github.com/login/device/code', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    },
+    body: new URLSearchParams({
+      client_id: githubClientId,
+      scope,
+    }).toString(),
+  })
+
+  const payload = await response.json()
+  if (!response.ok || !payload.device_code) {
+    return jsonResponse(
+      {
+        ok: false,
+        error: payload.error_description || payload.error || 'Failed to start GitHub device flow.',
+      },
+      500,
+      { headers: setCorsHeaders(createNoStoreHeaders(), corsOrigin) },
+    )
+  }
+
+  return jsonResponse(
+    {
+      ok: true,
+      deviceCode: payload.device_code,
+      userCode: payload.user_code,
+      verificationUri: payload.verification_uri,
+      verificationUriComplete: payload.verification_uri_complete || null,
+      expiresIn: payload.expires_in,
+      interval: payload.interval || 5,
+    },
+    200,
+    { headers: setCorsHeaders(createNoStoreHeaders(), corsOrigin) },
+  )
+}
+
+async function handleDevicePoll(request, env) {
+  const requestUrl = new URL(request.url)
+  const origin = requestUrl.searchParams.get('origin') || ''
+  const deviceCode = requestUrl.searchParams.get('device_code') || ''
+  const allowedOrigins = getAllowedOrigins(env)
+
+  if (!origin || !isAllowedOrigin(origin, allowedOrigins)) {
+    return textResponse('Origin is not allowed.', 400)
+  }
+
+  const corsOrigin = getValidatedRequestOrigin(request, env, origin)
+  if (!corsOrigin) {
+    return textResponse('Origin is not allowed.', 400)
+  }
+
+  if (!deviceCode) {
+    return jsonResponse(
+      { ok: false, error: 'Missing device_code.' },
+      400,
+      { headers: setCorsHeaders(createNoStoreHeaders(), corsOrigin) },
+    )
+  }
+
+  const response = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    },
+    body: new URLSearchParams({
+      client_id: assertEnv(env, 'GITHUB_CLIENT_ID'),
+      device_code: deviceCode,
+      grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+    }).toString(),
+  })
+
+  const payload = await response.json()
+  if (payload.access_token) {
+    return jsonResponse(
+      { ok: true, status: 'success', token: payload.access_token },
+      200,
+      { headers: setCorsHeaders(createNoStoreHeaders(), corsOrigin) },
+    )
+  }
+
+  if (payload.error === 'authorization_pending' || payload.error === 'slow_down') {
+    return jsonResponse(
+      {
+        ok: true,
+        status: 'pending',
+        interval: payload.error === 'slow_down' ? 8 : 5,
+      },
+      200,
+      { headers: setCorsHeaders(createNoStoreHeaders(), corsOrigin) },
+    )
+  }
+
+  if (payload.error === 'expired_token') {
+    return jsonResponse(
+      { ok: false, status: 'expired', error: 'GitHub login expired. Please start again.' },
+      410,
+      { headers: setCorsHeaders(createNoStoreHeaders(), corsOrigin) },
+    )
+  }
+
+  return jsonResponse(
+    {
+      ok: false,
+      status: 'error',
+      error: payload.error_description || payload.error || 'GitHub login failed.',
+    },
+    400,
+    { headers: setCorsHeaders(createNoStoreHeaders(), corsOrigin) },
+  )
 }
 
 export default {
@@ -272,6 +435,7 @@ export default {
           ok: true,
           provider: 'github-oauth',
           allowedOrigins: getAllowedOrigins(env),
+          deviceFlow: Boolean(env.GITHUB_CLIENT_ID),
         })
       }
 
@@ -281,6 +445,14 @@ export default {
 
       if (url.pathname === '/auth/github/callback') {
         return handleCallback(request, env)
+      }
+
+      if (url.pathname === '/auth/github/device/start') {
+        return handleDeviceStart(request, env)
+      }
+
+      if (url.pathname === '/auth/github/device/poll') {
+        return handleDevicePoll(request, env)
       }
 
       return textResponse('Not found.', 404)

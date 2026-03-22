@@ -6,6 +6,7 @@ workers_dev = false
 [vars]
 ALLOWED_ORIGINS = "https://hhtech.github.io,https://blog.sunmer.top"
 GITHUB_SCOPE = "public_repo"
+GITHUB_CLIENT_ID = "Ov23lioxjGX6H27pN6Uy"
 
 [[routes]]
 pattern = "auth.sunmer.top"
