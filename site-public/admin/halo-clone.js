@@ -16,6 +16,17 @@
     posts: "文章",
     pages: "页面",
     media: "附件",
+    attachment: "附件",
+    attachments: "附件",
+    taxonomies: "分类/标签",
+    taxonomy: "分类/标签",
+    categories: "分类/标签",
+    tags: "分类/标签",
+    frontend: "主题/菜单",
+    theme: "主题/菜单",
+    themes: "主题/菜单",
+    menu: "主题/菜单",
+    menus: "主题/菜单",
     settings: "设置",
   };
 
