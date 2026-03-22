@@ -1,11 +1,15 @@
-﻿---
-title: "法天象地"
-description: ""
-slug: "fa-tian-xiang-di"
-publishDate: 2025-08-01 08:51:08+08:00
+---
+title: 法天象地
+slug: fa-tian-xiang-di
+publishDate: 2025-07-31T16:51:00.000Z
+updateDate: 2025-07-31T16:51:00.000Z
 draft: false
+categories: []
+tags: []
 ---
 
-<p><img src="https://hhtech.github.io/XingFu-Blog/upload/1000060268.jpg" width="100%" height="100%" style="display: inline-block"><img src="" width="100%" height="100%" style="display: inline-block"></p>
+123456
 
+![](https://hhtech.github.io/XingFu-Blog/upload/1000060268.jpg)
 
+![]()
