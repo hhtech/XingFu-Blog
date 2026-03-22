@@ -35,6 +35,22 @@
     openFirstApplied: false,
     connectApplied: false,
     applying: false,
+    articleDataLoaded: false,
+    articleDataLoading: false,
+    articleDataError: "",
+    articlePosts: [],
+    articleMode: "list",
+    articleSelectedSlug: "",
+    articleSearch: "",
+    articleInspectorTab: "outline",
+    articleNotice: "",
+  };
+
+  const articleSource = {
+    owner: "hhtech",
+    repo: "XingFu-Blog",
+    branch: "main",
+    dir: "src/content/posts",
   };
 
   function buttonText(button) {
@@ -59,6 +75,656 @@
     return Array.from(document.querySelectorAll(".workspace-link")).find((button) =>
       buttonText(button).includes(name)
     );
+  }
+
+  function escapeHtml(value) {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function slugifyFileName(name) {
+    return name.replace(/\.md$/i, "");
+  }
+
+  function parseYamlValue(value) {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if (trimmed === "true") return true;
+    if (trimmed === "false") return false;
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      return trimmed
+        .slice(1, -1)
+        .split(",")
+        .map((item) => item.trim().replace(/^['"]|['"]$/g, ""))
+        .filter(Boolean);
+    }
+    return trimmed.replace(/^['"]|['"]$/g, "");
+  }
+
+  function parseFrontmatter(markdown) {
+    const match = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+    if (!match) return { attributes: {}, body: markdown };
+
+    const attributes = {};
+    let currentArrayKey = "";
+
+    match[1].split(/\r?\n/).forEach((line) => {
+      const arrayMatch = line.match(/^\s*-\s+(.+)$/);
+      if (arrayMatch && currentArrayKey) {
+        if (!Array.isArray(attributes[currentArrayKey])) attributes[currentArrayKey] = [];
+        attributes[currentArrayKey].push(arrayMatch[1].trim().replace(/^['"]|['"]$/g, ""));
+        return;
+      }
+
+      const keyMatch = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+      if (!keyMatch) return;
+
+      const key = keyMatch[1];
+      const rawValue = keyMatch[2];
+      if (!rawValue.trim()) {
+        attributes[key] = [];
+        currentArrayKey = key;
+        return;
+      }
+
+      attributes[key] = parseYamlValue(rawValue);
+      currentArrayKey = "";
+    });
+
+    return {
+      attributes,
+      body: markdown.slice(match[0].length),
+    };
+  }
+
+  function formatInlineMarkdown(value) {
+    return escapeHtml(value)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  }
+
+  function markdownToHtml(markdown) {
+    const lines = markdown.replace(/\r/g, "").split("\n");
+    const html = [];
+    let listItems = [];
+
+    function flushList() {
+      if (!listItems.length) return;
+      html.push(`<ul>${listItems.join("")}</ul>`);
+      listItems = [];
+    }
+
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        flushList();
+        return;
+      }
+
+      const listMatch = trimmed.match(/^[-*]\s+(.+)$/);
+      if (listMatch) {
+        listItems.push(`<li>${formatInlineMarkdown(listMatch[1])}</li>`);
+        return;
+      }
+
+      flushList();
+
+      const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        html.push(`<h${level}>${formatInlineMarkdown(headingMatch[2])}</h${level}>`);
+        return;
+      }
+
+      if (/^>\s+/.test(trimmed)) {
+        html.push(`<blockquote>${formatInlineMarkdown(trimmed.replace(/^>\s+/, ""))}</blockquote>`);
+        return;
+      }
+
+      html.push(`<p>${formatInlineMarkdown(trimmed)}</p>`);
+    });
+
+    flushList();
+    return html.join("") || "<p></p>";
+  }
+
+  function stripHtml(value) {
+    const node = document.createElement("div");
+    node.innerHTML = value;
+    return node.textContent.replace(/\s+/g, " ").trim();
+  }
+
+  function formatDate(dateValue) {
+    const parsed = new Date(dateValue);
+    if (Number.isNaN(parsed.getTime())) return dateValue || "未设置日期";
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(
+      parsed.getDate()
+    ).padStart(2, "0")} ${String(parsed.getHours()).padStart(2, "0")}:${String(
+      parsed.getMinutes()
+    ).padStart(2, "0")}`;
+  }
+
+  function articleUrl(slug) {
+    return `https://api.github.com/repos/${articleSource.owner}/${articleSource.repo}/contents/${
+      articleSource.dir
+    }/${slug}.md?ref=${articleSource.branch}`;
+  }
+
+  async function fetchText(url) {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/vnd.github+json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub API ${response.status}`);
+    }
+
+    return response.text();
+  }
+
+  async function fetchJson(url) {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/vnd.github+json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub API ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  function collectOutline(html) {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = html;
+    return Array.from(wrapper.querySelectorAll("h1, h2, h3"))
+      .map((node, index) => ({
+        id: `outline-${index}`,
+        level: Number(node.tagName.slice(1)),
+        text: node.textContent.trim(),
+      }))
+      .filter((item) => item.text);
+  }
+
+  function currentArticle() {
+    return state.articlePosts.find((post) => post.slug === state.articleSelectedSlug) || null;
+  }
+
+  function syncArticleQuery() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "articles");
+
+    if (state.articleMode === "editor" && state.articleSelectedSlug) {
+      url.searchParams.set("post", state.articleSelectedSlug);
+    } else {
+      url.searchParams.delete("post");
+    }
+
+    window.history.replaceState({}, "", url);
+  }
+
+  function setArticleMode(mode, slug = "") {
+    state.articleMode = mode;
+    state.articleSelectedSlug = slug;
+    state.articleNotice = "";
+    syncArticleQuery();
+    renderArticlesWorkspace();
+  }
+
+  function applyArticleQueryState() {
+    const params = new URLSearchParams(window.location.search);
+    const requestedPost = params.get("post");
+
+    if (requestedPost && state.articlePosts.some((post) => post.slug === requestedPost)) {
+      state.articleMode = "editor";
+      state.articleSelectedSlug = requestedPost;
+      return;
+    }
+
+    if (params.get("openFirst") === "1" && state.articlePosts.length) {
+      state.articleMode = "editor";
+      state.articleSelectedSlug = state.articlePosts[0].slug;
+      return;
+    }
+
+    if (!state.articleSelectedSlug || !state.articlePosts.some((post) => post.slug === state.articleSelectedSlug)) {
+      state.articleMode = "list";
+      state.articleSelectedSlug = "";
+    }
+  }
+
+  async function ensureArticlesData() {
+    if (state.articleDataLoaded || state.articleDataLoading) return;
+
+    state.articleDataLoading = true;
+    state.articleDataError = "";
+    renderArticlesWorkspace();
+
+    try {
+      let posts = [];
+
+      try {
+        posts = await fetchJson("./articles-index.json");
+      } catch (indexError) {
+        const encodedDir = articleSource.dir
+          .split("/")
+          .map((segment) => encodeURIComponent(segment))
+          .join("/");
+        const files = await fetchJson(
+          `https://api.github.com/repos/${articleSource.owner}/${articleSource.repo}/contents/${encodedDir}?ref=${articleSource.branch}`
+        );
+
+        const markdownFiles = files.filter((item) => item.type === "file" && /\.md$/i.test(item.name));
+        posts = await Promise.all(
+          markdownFiles.map(async (item) => {
+            const markdown = await fetchText(item.download_url);
+            const parsed = parseFrontmatter(markdown);
+            const title = parsed.attributes.title || slugifyFileName(item.name);
+            const html = markdownToHtml(parsed.body);
+            const plainText = stripHtml(html);
+            const tags = Array.isArray(parsed.attributes.tags)
+              ? parsed.attributes.tags
+              : parsed.attributes.tags
+              ? [parsed.attributes.tags]
+              : [];
+            const categories = Array.isArray(parsed.attributes.category)
+              ? parsed.attributes.category
+              : Array.isArray(parsed.attributes.categories)
+              ? parsed.attributes.categories
+              : parsed.attributes.category
+              ? [parsed.attributes.category]
+              : parsed.attributes.categories
+              ? [parsed.attributes.categories]
+              : [];
+
+            return {
+              slug: slugifyFileName(item.name),
+              path: item.path,
+              title,
+              date: parsed.attributes.date || item.name,
+              dateLabel: formatDate(parsed.attributes.date || ""),
+              status: parsed.attributes.draft ? "草稿" : "已发布",
+              author: "XF",
+              tags,
+              categories,
+              excerpt: plainText.slice(0, 90),
+              html,
+              plainText,
+              outline: collectOutline(html),
+              rawBody: parsed.body,
+            };
+          })
+        );
+      }
+
+      state.articlePosts = posts
+        .map((post) => ({
+          ...post,
+          outline: Array.isArray(post.outline) ? post.outline : collectOutline(post.html || ""),
+          plainText: post.plainText || stripHtml(post.html || ""),
+          excerpt: post.excerpt || stripHtml(post.html || "").slice(0, 90),
+          dateLabel: post.dateLabel || formatDate(post.date || ""),
+          author: post.author || "XF",
+          tags: Array.isArray(post.tags) ? post.tags : [],
+          categories: Array.isArray(post.categories) ? post.categories : [],
+        }))
+        .sort((left, right) => String(right.date).localeCompare(String(left.date)));
+      state.articleDataLoaded = true;
+      applyArticleQueryState();
+      syncArticleQuery();
+    } catch (error) {
+      state.articleDataError = error instanceof Error ? error.message : "文章加载失败";
+    } finally {
+      state.articleDataLoading = false;
+      renderArticlesWorkspace();
+    }
+  }
+
+  function filteredArticlePosts() {
+    const keyword = state.articleSearch.trim().toLowerCase();
+    if (!keyword) return state.articlePosts;
+
+    return state.articlePosts.filter((post) => {
+      const haystack = [post.title, post.excerpt, post.slug, post.tags.join(" "), post.categories.join(" ")]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(keyword);
+    });
+  }
+
+  function articleListViewHtml() {
+    const posts = filteredArticlePosts();
+    const rows = posts.length
+      ? posts
+          .map(
+            (post) => `
+        <button class="halo-article-row" type="button" data-article-action="open-post" data-slug="${post.slug}">
+          <span class="halo-article-checkbox"></span>
+          <div class="halo-article-row-main">
+            <strong>${escapeHtml(post.title)}</strong>
+            <span>${escapeHtml(post.categories.join(" / ") || "默认分类")} · ${post.plainText.length} 字 · 评论 0</span>
+            ${
+              post.tags.length
+                ? `<div class="halo-article-tag-row">${post.tags
+                    .slice(0, 3)
+                    .map((tag) => `<span class="halo-article-tag">${escapeHtml(tag)}</span>`)
+                    .join("")}</div>`
+                : ""
+            }
+          </div>
+          <span class="halo-article-author">${escapeHtml(post.author)}</span>
+          <span class="halo-article-status">${escapeHtml(post.status)}</span>
+          <span class="halo-article-date">${escapeHtml(post.dateLabel)}</span>
+          <span class="halo-article-more">...</span>
+        </button>`
+          )
+          .join("")
+      : `<div class="halo-article-empty">没有命中任何文章，换个关键词再试。</div>`;
+
+    return `
+      <section class="halo-article-list-view">
+        <div class="halo-article-pagebar">
+          <div class="halo-article-heading"><span class="halo-article-heading-icon">[]</span><h2>文章</h2></div>
+          <div class="halo-article-page-actions">
+            <button type="button" class="secondary-button small-button" data-article-action="notice" data-notice="分类入口已就位，下一步可以继续接真实分类管理。">分类</button>
+            <button type="button" class="secondary-button small-button" data-article-action="notice" data-notice="标签入口已就位，下一步可以继续接真实标签管理。">标签</button>
+            <button type="button" class="secondary-button small-button" data-article-action="notice" data-notice="回收站入口已预留，后面可接删除文章回收流程。">回收站</button>
+            <button type="button" class="halo-dark-button" data-article-action="new-post">新建</button>
+          </div>
+        </div>
+        <section class="halo-article-table">
+          <div class="halo-article-filterbar">
+            <label class="halo-article-search">
+              <span class="halo-article-checkbox"></span>
+              <input type="search" placeholder="输入关键词搜索" value="${escapeHtml(state.articleSearch)}" data-article-input="search" />
+            </label>
+            <div class="halo-article-filterchips">
+              <span>状态：全部</span>
+              <span>可见性：全部</span>
+              <span>分类</span>
+              <span>标签</span>
+              <span>作者</span>
+              <span>排序：默认</span>
+            </div>
+          </div>
+          <div class="halo-article-tablebody">${rows}</div>
+          <div class="halo-article-tablefoot">
+            <span>共 ${posts.length} 项数据</span>
+            <div class="halo-article-pagination">
+              <button type="button" class="secondary-button small-button" disabled>‹</button>
+              <button type="button" class="secondary-button small-button" disabled>›</button>
+              <span>1 / 1</span>
+              <span>20 条 / 页</span>
+            </div>
+          </div>
+        </section>
+      </section>`;
+  }
+
+  function articleEditorViewHtml(post) {
+    const outline = post.outline.length
+      ? post.outline
+          .map(
+            (item) => `<button type="button" class="halo-outline-item level-${item.level}" data-article-action="jump-outline" data-outline-text="${escapeHtml(
+              item.text
+            )}">${escapeHtml(item.text)}</button>`
+          )
+          .join("")
+      : '<div class="halo-outline-empty">暂无大纲</div>';
+
+    const detailPanel = `
+      <div class="halo-article-meta-group">
+        <label><span>Slug</span><input value="${escapeHtml(post.slug)}" readonly /></label>
+        <label><span>发布日期</span><input value="${escapeHtml(post.dateLabel)}" readonly /></label>
+      </div>
+      <label><span>分类</span><input value="${escapeHtml(post.categories.join(" / ") || "默认分类")}" readonly /></label>
+      <label><span>标签</span><input value="${escapeHtml(post.tags.join(" / ") || "未设置标签")}" readonly /></label>
+      <label><span>附件</span><input value="图片素材、封面和媒体入口预留中" readonly /></label>
+      <label><span>文章摘要</span><textarea class="summary-textarea" readonly>${escapeHtml(post.excerpt)}</textarea></label>`;
+
+    return `
+      <section class="halo-article-editor-view">
+        <div class="halo-article-pagebar">
+          <div class="halo-article-heading"><button type="button" class="halo-back-button" data-article-action="back-list">返回列表</button><span class="halo-article-heading-icon">[]</span><h2>文章</h2></div>
+          <div class="halo-article-page-actions">
+            <button type="button" class="secondary-button small-button" data-article-action="notice" data-notice="版本历史会在接入 GitHub 写回后继续补上。">版本历史</button>
+            <button type="button" class="secondary-button small-button" data-article-action="notice" data-notice="当前是编辑模式，后续可以接前台预览链接。">预览</button>
+            <button type="button" class="secondary-button small-button" data-article-action="notice" data-notice="当前编辑是本地浏览器态，接入 Token 后可继续做仓库保存。">保存</button>
+            <button type="button" class="secondary-button small-button" data-article-action="switch-tab" data-tab="details">设置</button>
+            <button type="button" class="halo-dark-button" data-article-action="notice" data-notice="发布按钮已对齐 Halo 位置，后面可以继续接入真实发布逻辑。">发布</button>
+          </div>
+        </div>
+        <div class="halo-editor-toolbar">
+          <button type="button" class="halo-toolbar-dot" title="文章操作"></button>
+          <button type="button" data-article-action="exec" data-command="undo">↶</button>
+          <button type="button" data-article-action="exec" data-command="redo">↷</button>
+          <button type="button" data-article-action="exec" data-command="removeFormat">Tx</button>
+          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="H1">H1</button>
+          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="H2">H2</button>
+          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="P">正文</button>
+          <button type="button" data-article-action="exec" data-command="bold">B</button>
+          <button type="button" data-article-action="exec" data-command="italic">I</button>
+          <button type="button" data-article-action="exec" data-command="underline">U</button>
+          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="BLOCKQUOTE">引</button>
+          <button type="button" data-article-action="exec" data-command="insertUnorderedList">•</button>
+          <button type="button" data-article-action="exec" data-command="insertOrderedList">1.</button>
+          <button type="button" data-article-action="exec" data-command="justifyLeft">左</button>
+          <button type="button" data-article-action="exec" data-command="justifyCenter">中</button>
+          <button type="button" data-article-action="exec" data-command="justifyRight">右</button>
+        </div>
+        <div class="halo-editor-layout">
+          <section class="halo-editor-main">
+            <input class="halo-article-title-input" value="${escapeHtml(post.title)}" data-article-input="title" />
+            <div class="halo-editor-divider"></div>
+            <div class="halo-article-editor-canvas" contenteditable="true" data-article-input="body">${post.html}</div>
+          </section>
+          <aside class="halo-editor-sidebar">
+            <div class="halo-editor-sidebar-tabs">
+              <button type="button" class="${state.articleInspectorTab === "outline" ? "active" : ""}" data-article-action="switch-tab" data-tab="outline">大纲</button>
+              <button type="button" class="${state.articleInspectorTab === "details" ? "active" : ""}" data-article-action="switch-tab" data-tab="details">详情</button>
+            </div>
+            <div class="halo-editor-sidebar-body">
+              ${state.articleInspectorTab === "outline" ? outline : detailPanel}
+            </div>
+          </aside>
+        </div>
+      </section>`;
+  }
+
+  function renderArticlesWorkspace() {
+    const main = document.querySelector(".console-main");
+    if (!main) return;
+
+    const root = main.querySelector(".halo-articles-root");
+    if (!root) return;
+
+    document.body.classList.toggle("halo-articles-active", document.body.classList.contains("view-articles"));
+    document.body.classList.toggle("halo-articles-editor-open", state.articleMode === "editor");
+
+    if (state.articleDataLoading) {
+      root.innerHTML = `
+        <section class="halo-article-loading">
+          <div class="halo-article-heading"><span class="halo-article-heading-icon">[]</span><h2>文章</h2></div>
+          <div class="halo-article-empty">正在加载 GitHub 仓库里的文章列表...</div>
+        </section>`;
+      return;
+    }
+
+    if (state.articleDataError) {
+      root.innerHTML = `
+        <section class="halo-article-loading">
+          <div class="halo-article-heading"><span class="halo-article-heading-icon">[]</span><h2>文章</h2></div>
+          <div class="halo-article-empty">
+            <p>文章列表加载失败：${escapeHtml(state.articleDataError)}</p>
+            <button type="button" class="primary-button small-button" data-article-action="retry">重新加载</button>
+          </div>
+        </section>`;
+      return;
+    }
+
+    const post = currentArticle();
+    const banner = state.articleNotice
+      ? `<div class="notice-banner success-banner halo-article-banner">${escapeHtml(state.articleNotice)}</div>`
+      : "";
+
+    root.innerHTML =
+      banner +
+      (state.articleMode === "editor" && post ? articleEditorViewHtml(post) : articleListViewHtml());
+  }
+
+  function updateArticleSnapshotFromDom() {
+    const post = currentArticle();
+    const root = document.querySelector(".halo-articles-root");
+    if (!post || !root) return;
+
+    const titleInput = root.querySelector(".halo-article-title-input");
+    const editorCanvas = root.querySelector(".halo-article-editor-canvas");
+    if (titleInput) post.title = titleInput.value.trim() || "未命名文章";
+    if (editorCanvas) {
+      post.html = editorCanvas.innerHTML;
+      post.plainText = editorCanvas.innerText.replace(/\s+/g, " ").trim();
+      post.excerpt = post.plainText.slice(0, 90);
+      post.outline = collectOutline(post.html);
+    }
+  }
+
+  function runArticleCommand(command, value) {
+    const editor = document.querySelector(".halo-article-editor-canvas");
+    if (!editor) return;
+    editor.focus();
+
+    if (command === "formatBlock") {
+      document.execCommand(command, false, value);
+    } else {
+      document.execCommand(command, false);
+    }
+
+    window.requestAnimationFrame(() => {
+      updateArticleSnapshotFromDom();
+      if (state.articleInspectorTab === "outline") renderArticlesWorkspace();
+    });
+  }
+
+  function handleArticlesWorkspaceClick(event) {
+    const trigger = event.target.closest("[data-article-action]");
+    if (!trigger) return;
+
+    const action = trigger.dataset.articleAction;
+    if (action === "open-post") {
+      setArticleMode("editor", trigger.dataset.slug || "");
+      return;
+    }
+
+    if (action === "back-list") {
+      setArticleMode("list");
+      return;
+    }
+
+    if (action === "retry") {
+      state.articleDataLoaded = false;
+      state.articleDataError = "";
+      ensureArticlesData();
+      return;
+    }
+
+    if (action === "switch-tab") {
+      state.articleInspectorTab = trigger.dataset.tab || "outline";
+      updateArticleSnapshotFromDom();
+      renderArticlesWorkspace();
+      return;
+    }
+
+    if (action === "exec") {
+      runArticleCommand(trigger.dataset.command, trigger.dataset.value || "");
+      return;
+    }
+
+    if (action === "new-post") {
+      const slug = `draft-${Date.now()}`;
+      const post = {
+        slug,
+        path: "",
+        title: "未命名文章",
+        date: new Date().toISOString(),
+        dateLabel: formatDate(new Date().toISOString()),
+        status: "草稿",
+        author: "XF",
+        tags: ["Halo"],
+        categories: ["默认分类"],
+        excerpt: "",
+        html: "<p></p>",
+        plainText: "",
+        outline: [],
+        rawBody: "",
+      };
+      state.articlePosts.unshift(post);
+      setArticleMode("editor", slug);
+      return;
+    }
+
+    if (action === "notice") {
+      state.articleNotice = trigger.dataset.notice || "功能入口已经预留好了。";
+      renderArticlesWorkspace();
+      return;
+    }
+
+    if (action === "jump-outline") {
+      const text = trigger.dataset.outlineText;
+      const heading = Array.from(document.querySelectorAll(".halo-article-editor-canvas h1, .halo-article-editor-canvas h2, .halo-article-editor-canvas h3")).find(
+        (node) => node.textContent.trim() === text
+      );
+      if (heading) heading.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
+
+  function handleArticlesWorkspaceInput(event) {
+    const target = event.target;
+    const inputType = target.dataset.articleInput;
+
+    if (inputType === "search") {
+      state.articleSearch = target.value;
+      renderArticlesWorkspace();
+      return;
+    }
+
+    if (inputType === "title" || inputType === "body") {
+      updateArticleSnapshotFromDom();
+    }
+  }
+
+  function ensureArticlesWorkspace() {
+    const main = document.querySelector(".console-main");
+    if (!main) return;
+
+    const existing = main.querySelector(".halo-articles-root");
+    const shouldActivate = document.body.classList.contains("view-articles");
+
+    if (!shouldActivate) {
+      document.body.classList.remove("halo-articles-active", "halo-articles-editor-open");
+      existing?.remove();
+      return;
+    }
+
+    let root = existing;
+    if (!root) {
+      root = document.createElement("section");
+      root.className = "halo-articles-root";
+      root.addEventListener("click", handleArticlesWorkspaceClick);
+      root.addEventListener("input", handleArticlesWorkspaceInput);
+      main.appendChild(root);
+    }
+
+    renderArticlesWorkspace();
+    ensureArticlesData();
   }
 
   function ensureSidebar() {
@@ -124,6 +790,17 @@
         node.textContent = "系统";
         nav.insertBefore(node, settingsButton);
       }
+    }
+
+    if (articlesButton && !articlesButton.dataset.haloListReset) {
+      articlesButton.dataset.haloListReset = "1";
+      articlesButton.addEventListener("click", () => {
+        state.articleMode = "list";
+        state.articleSelectedSlug = "";
+        state.articleNotice = "";
+        syncArticleQuery();
+        renderArticlesWorkspace();
+      });
     }
 
     if (!sidebar.querySelector(".halo-sidebar-footer")) {
@@ -198,6 +875,7 @@
     ensureSidebar();
     setViewClasses();
     applyQueryView();
+    ensureArticlesWorkspace();
     observer.observe(document.body, { childList: true, subtree: true });
     state.applying = false;
   }
