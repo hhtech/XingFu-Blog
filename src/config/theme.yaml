@@ -1,28 +1,28 @@
 site:
-  url: "https://hhtech.github.io/XingFu-Blog/"
-  title: "Xing Fu' Blog"
-  author: "Xing Fu' Blog"
-  description: "记录旧文、随想和新的开始。"
-  favicon: "favicon.png"
+  url: https://hhtech.github.io/XingFu-Blog/
+  title: Xing Fu' Blog
+  author: Xing Fu' Blog
+  description: 记录旧文、随想和新的开始。
+  favicon: favicon.png
   pageSize: 6
 global:
-  avatar: "avatar.png"
+  avatar: avatar.png
   rss: true
   i18n: false
   search: false
 nav:
-  - name: "归档"
-    url: "/archives"
-  - name: "分类"
-    url: "/categories"
-  - name: "标签"
-    url: "/tags"
-  - name: "关于"
-    url: "/about"
+  - name: 归档
+    url: /archives
+  - name: 分类
+    url: /categories
+  - name: 标签
+    url: /tags
+  - name: 关于
+    url: /about
 footer:
   copyright:
-    owner: "Xing Fu' Blog"
-    time: "2025 - 2026"
+    owner: Xing Fu' Blog
+    time: 2025 - 2026
   beian:
     icp:
       enabled: false
@@ -30,9 +30,9 @@ footer:
       enabled: false
 index:
   social:
-    - name: "GitHub"
+    - name: GitHub
       enabled: true
-      url: "https://github.com/hhtech"
+      url: https://github.com/hhtech
 post:
   toc: true
   readingTime: true
@@ -42,7 +42,7 @@ post:
       NC: true
       SA: true
       ND: false
-    url: "https://creativecommons.org/licenses/by-nc-sa/4.0"
+    url: https://creativecommons.org/licenses/by-nc-sa/4.0
 sponsor:
   enabled: false
   alipay:
@@ -57,5 +57,5 @@ comment:
 tools:
   umami:
     enabled: false
-    src: "https://cloud.umami.is"
+    src: https://cloud.umami.is
     websiteID: ""
