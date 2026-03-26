@@ -1973,6 +1973,19 @@ body.halo-articles-active .console-main > :not(.halo-articles-root) {
   border-left: 3px solid #cbd5e1;
 }
 
+.halo-article-editor-canvas img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 18px 0;
+  border-radius: 16px;
+}
+
+.halo-article-editor-canvas img.halo-selected-image {
+  outline: 3px solid #2563eb;
+  outline-offset: 4px;
+}
+
 .halo-editor-sidebar {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);

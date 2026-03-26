@@ -78,6 +78,13 @@ function normalizeArray(value) {
   return [String(value).trim()].filter(Boolean);
 }
 
+function repairLegacyImageHtml(html) {
+  return String(html || "").replace(/!\s*<a\b[^>]*href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_, __, href, text) => {
+    const alt = stripHtml(text || "").trim();
+    return `<img src="${escapeHtml(href)}" alt="${escapeHtml(alt)}" />`;
+  });
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -146,7 +153,7 @@ function markdownToHtml(markdown) {
 function normalizeBody(body) {
   const normalized = stripBom(body).trim();
   if (!normalized) return "<p></p>";
-  return /<[a-z][\s\S]*>/i.test(normalized) ? normalized : markdownToHtml(normalized);
+  return /<[a-z][\s\S]*>/i.test(normalized) ? repairLegacyImageHtml(normalized) : markdownToHtml(normalized);
 }
 
 function decodeEntities(value) {

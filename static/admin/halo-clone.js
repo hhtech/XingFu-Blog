@@ -324,10 +324,17 @@
     return [String(value).trim()].filter(Boolean);
   }
 
+  function repairLegacyImageHtml(html) {
+    return String(html || "").replace(/!\s*<a\b[^>]*href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_, __, href, text) => {
+      const alt = stripHtml(text || "").trim();
+      return `<img src="${escapeHtml(href)}" alt="${escapeHtml(alt)}" />`;
+    });
+  }
+
   function normalizeArticleBody(body) {
     const normalized = String(body || "").replace(/^\uFEFF/, "").trim();
     if (!normalized) return "<p></p>";
-    return /<[a-z][\s\S]*>/i.test(normalized) ? normalized : markdownToHtml(normalized);
+    return /<[a-z][\s\S]*>/i.test(normalized) ? repairLegacyImageHtml(normalized) : markdownToHtml(normalized);
   }
 
   function editorBodyHtml(html) {
@@ -1578,11 +1585,25 @@
     }
   }
 
+  function clearSelectedArticleImage(root) {
+    root?.querySelectorAll(".halo-article-editor-canvas img.halo-selected-image").forEach((image) => {
+      image.classList.remove("halo-selected-image");
+    });
+  }
+
   function handleArticlesWorkspaceKeydown(event) {
     const editor = event.target.closest(".halo-article-editor-canvas");
     if (!editor || state.articlePreviewMode) return;
 
     if (event.key === "Backspace" || event.key === "Delete") {
+      const selectedImage = editor.querySelector("img.halo-selected-image");
+      if (selectedImage) {
+        event.preventDefault();
+        selectedImage.remove();
+        updateArticleSnapshotFromDom();
+        return;
+      }
+
       const selection = window.getSelection();
       if (!selection?.rangeCount) return;
 
@@ -1615,6 +1636,20 @@
   }
 
   function handleArticlesWorkspaceClick(event) {
+    const image = event.target.closest(".halo-article-editor-canvas img");
+    if (image) {
+      const editor = image.closest(".halo-article-editor-canvas");
+      clearSelectedArticleImage(editor);
+      image.classList.add("halo-selected-image");
+      editor?.focus();
+      event.preventDefault();
+      return;
+    }
+
+    if (event.target.closest(".halo-article-editor-canvas")) {
+      clearSelectedArticleImage(event.currentTarget);
+    }
+
     const trigger = event.target.closest("[data-article-action]");
     if (!trigger) return;
 
