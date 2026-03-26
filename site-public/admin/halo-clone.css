@@ -1665,6 +1665,20 @@ body.halo-articles-active .console-main > :not(.halo-articles-root) {
   scrollbar-width: thin;
 }
 
+@media (max-width: 980px) {
+  .halo-article-pagebar {
+    align-items: stretch;
+  }
+
+  .halo-article-page-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+}
+
 .halo-dark-button {
   display: inline-flex;
   align-items: center;
