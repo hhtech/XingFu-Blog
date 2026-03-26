@@ -88,6 +88,10 @@ function escapeHtml(value) {
 
 function formatInlineMarkdown(value) {
   return escapeHtml(value)
+    .replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (_, alt, src, title) => {
+      const titleAttribute = title ? ` title="${title}"` : "";
+      return `<img src="${src}" alt="${alt}"${titleAttribute} />`;
+    })
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")

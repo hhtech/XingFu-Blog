@@ -43,6 +43,12 @@
     articleSelectedSlug: "",
     articleSearch: "",
     articleInspectorTab: "outline",
+    articlePreviewMode: false,
+    articleHistoryOpen: false,
+    articleHistoryLoading: false,
+    articleHistoryError: "",
+    articleHistoryItems: [],
+    articleHistorySlug: "",
     articleNotice: "",
     articleError: "",
     articleSavingAction: "",
@@ -147,6 +153,10 @@
 
   function formatInlineMarkdown(value) {
     return escapeHtml(value)
+      .replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (_, alt, src, title) => {
+        const titleAttribute = title ? ` title="${title}"` : "";
+        return `<img src="${src}" alt="${alt}"${titleAttribute} />`;
+      })
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/\*([^*]+)\*/g, "<em>$1</em>")
@@ -553,6 +563,15 @@
     return state.articlePosts.find((post) => post.slug === state.articleSelectedSlug) || null;
   }
 
+  function resetArticleOverlayState() {
+    state.articlePreviewMode = false;
+    state.articleHistoryOpen = false;
+    state.articleHistoryLoading = false;
+    state.articleHistoryError = "";
+    state.articleHistoryItems = [];
+    state.articleHistorySlug = "";
+  }
+
   function syncArticleQuery() {
     const url = new URL(window.location.href);
     url.searchParams.set("view", "articles");
@@ -571,8 +590,58 @@
     state.articleSelectedSlug = slug;
     state.articleNotice = "";
     state.articleError = "";
+    resetArticleOverlayState();
     syncArticleQuery();
     renderArticlesWorkspace();
+  }
+
+  async function loadArticleHistory(post) {
+    if (!post?.path) {
+      state.articleHistoryItems = [];
+      state.articleHistoryError = "当前文章还没有仓库路径，暂时无法查看版本历史。";
+      state.articleHistoryLoading = false;
+      renderArticlesWorkspace();
+      return;
+    }
+
+    if (state.articleHistoryLoading && state.articleHistorySlug === post.slug) {
+      return;
+    }
+
+    state.articleHistoryLoading = true;
+    state.articleHistoryError = "";
+    state.articleHistorySlug = post.slug;
+    renderArticlesWorkspace();
+
+    try {
+      const settings = getStoredArticleSettings();
+      const token = getStoredArticleToken();
+      const commits = await fetchJson(
+        `https://api.github.com/repos/${settings.owner}/${settings.repo}/commits?path=${encodeURIComponent(
+          post.path
+        )}&sha=${encodeURIComponent(settings.branch)}&per_page=12`,
+        token
+      );
+
+      state.articleHistoryItems = Array.isArray(commits)
+        ? commits.map((item) => ({
+            sha: String(item.sha || "").slice(0, 7),
+            message: String(item.commit?.message || "无提交说明").split("\n")[0],
+            author: item.commit?.author?.name || item.author?.login || "未知作者",
+            date: formatDate(item.commit?.author?.date || item.commit?.committer?.date || ""),
+            url: item.html_url || "",
+          }))
+        : [];
+      if (!state.articleHistoryItems.length) {
+        state.articleHistoryError = "当前文章还没有可展示的提交记录。";
+      }
+    } catch (error) {
+      state.articleHistoryItems = [];
+      state.articleHistoryError = error instanceof Error ? error.message : "版本历史加载失败";
+    } finally {
+      state.articleHistoryLoading = false;
+      renderArticlesWorkspace();
+    }
   }
 
   function applyArticleQueryState() {
@@ -1232,11 +1301,300 @@
       root.className = "halo-articles-root";
       root.addEventListener("click", handleArticlesWorkspaceClick);
       root.addEventListener("input", handleArticlesWorkspaceInput);
+      root.addEventListener("keydown", handleArticlesWorkspaceKeydown);
       main.appendChild(root);
     }
 
     renderArticlesWorkspace();
     ensureArticlesData();
+  }
+
+  function articleHistoryModalHtml(post) {
+    if (!state.articleHistoryOpen) return "";
+
+    const body = state.articleHistoryLoading
+      ? '<div class="halo-history-empty">正在加载版本历史...</div>'
+      : state.articleHistoryError
+      ? `<div class="halo-history-empty">${escapeHtml(state.articleHistoryError)}</div>`
+      : state.articleHistoryItems.length
+      ? `<div class="halo-history-list">${state.articleHistoryItems
+          .map(
+            (item) => `
+              <div class="halo-history-item">
+                <div class="halo-history-meta">
+                  <strong>${escapeHtml(item.message)}</strong>
+                  <span>${escapeHtml(item.sha)} · ${escapeHtml(item.author)} · ${escapeHtml(item.date)}</span>
+                </div>
+                ${
+                  item.url
+                    ? `<a class="secondary-button small-button halo-history-link" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">打开提交</a>`
+                    : ""
+                }
+              </div>`
+          )
+          .join("")}</div>`
+      : '<div class="halo-history-empty">当前文章还没有可展示的提交记录。</div>';
+
+    return `
+      <div class="halo-history-backdrop" data-article-action="close-history">
+        <section class="halo-history-modal" role="dialog" aria-modal="true" aria-label="版本历史">
+          <div class="halo-history-header">
+            <div>
+              <h3>版本历史</h3>
+              <p>${escapeHtml(post.title || post.slug)}</p>
+            </div>
+            <button type="button" class="secondary-button small-button" data-article-action="close-history">关闭</button>
+          </div>
+          ${body}
+        </section>
+      </div>`;
+  }
+
+  function articleEditorViewHtml(post) {
+    const outline = post.outline.length
+      ? post.outline
+          .map(
+            (item) => `<button type="button" class="halo-outline-item level-${item.level}" data-article-action="jump-outline" data-outline-text="${escapeHtml(
+              item.text
+            )}">${escapeHtml(item.text)}</button>`
+          )
+          .join("")
+      : '<div class="halo-outline-empty">暂无大纲</div>';
+
+    const detailPanel = `
+      <div class="halo-article-meta-group">
+        <label><span>Slug</span><input value="${escapeHtml(post.slug)}" readonly /></label>
+        <label><span>发布时间</span><input value="${escapeHtml(post.dateLabel)}" readonly /></label>
+      </div>
+      <label><span>分类</span><input value="${escapeHtml(post.categories.join(" / ") || "默认分类")}" readonly /></label>
+      <label><span>标签</span><input value="${escapeHtml(post.tags.join(" / ") || "未设置标签")}" readonly /></label>
+      <label><span>附件</span><input value="图片素材、封面和媒体入口预留中" readonly /></label>
+      <label><span>文章摘要</span><textarea class="summary-textarea" readonly>${escapeHtml(post.excerpt)}</textarea></label>`;
+
+    const previewLabel = state.articlePreviewMode ? "编辑" : "预览";
+    const toolbarDisabled = state.articlePreviewMode ? " disabled" : "";
+
+    return `
+      <section class="halo-article-editor-view">
+        <div class="halo-article-pagebar">
+          <div class="halo-article-heading"><button type="button" class="halo-back-button" data-article-action="back-list">返回列表</button><span class="halo-article-heading-icon">[]</span><h2>文章</h2></div>
+          <div class="halo-article-page-actions">
+            <button type="button" class="secondary-button small-button" data-article-action="toggle-history">版本历史</button>
+            <button type="button" class="secondary-button small-button" data-article-action="toggle-preview">${previewLabel}</button>
+            <button type="button" class="secondary-button small-button" data-article-action="save">保存</button>
+            <button type="button" class="secondary-button small-button" data-article-action="switch-tab" data-tab="details">设置</button>
+            <button type="button" class="halo-dark-button" data-article-action="publish">发布</button>
+          </div>
+        </div>
+        <div class="halo-editor-toolbar">
+          <button type="button" class="halo-toolbar-dot" title="文章操作"></button>
+          <button type="button" data-article-action="exec" data-command="undo"${toolbarDisabled}>↶</button>
+          <button type="button" data-article-action="exec" data-command="redo"${toolbarDisabled}>↷</button>
+          <button type="button" data-article-action="exec" data-command="removeFormat"${toolbarDisabled}>Tx</button>
+          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="H1"${toolbarDisabled}>H1</button>
+          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="H2"${toolbarDisabled}>H2</button>
+          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="P"${toolbarDisabled}>正文</button>
+          <button type="button" data-article-action="exec" data-command="bold"${toolbarDisabled}>B</button>
+          <button type="button" data-article-action="exec" data-command="italic"${toolbarDisabled}>I</button>
+          <button type="button" data-article-action="exec" data-command="underline"${toolbarDisabled}>U</button>
+          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="BLOCKQUOTE"${toolbarDisabled}>引</button>
+          <button type="button" data-article-action="exec" data-command="insertUnorderedList"${toolbarDisabled}>•</button>
+          <button type="button" data-article-action="exec" data-command="insertOrderedList"${toolbarDisabled}>1.</button>
+          <button type="button" data-article-action="exec" data-command="justifyLeft"${toolbarDisabled}>左</button>
+          <button type="button" data-article-action="exec" data-command="justifyCenter"${toolbarDisabled}>中</button>
+          <button type="button" data-article-action="exec" data-command="justifyRight"${toolbarDisabled}>右</button>
+        </div>
+        <div class="halo-editor-layout">
+          <section class="halo-editor-main">
+            <input class="halo-article-title-input" value="${escapeHtml(post.title)}" data-article-input="title" />
+            <div class="halo-editor-divider"></div>
+            <div class="halo-article-editor-canvas ${state.articlePreviewMode ? "is-preview" : ""}" contenteditable="${
+              state.articlePreviewMode ? "false" : "true"
+            }" data-article-input="body">${post.html}</div>
+          </section>
+          <aside class="halo-editor-sidebar">
+            <div class="halo-editor-sidebar-tabs">
+              <button type="button" class="${state.articleInspectorTab === "outline" ? "active" : ""}" data-article-action="switch-tab" data-tab="outline">大纲</button>
+              <button type="button" class="${state.articleInspectorTab === "details" ? "active" : ""}" data-article-action="switch-tab" data-tab="details">详情</button>
+            </div>
+            <div class="halo-editor-sidebar-body">
+              ${state.articleInspectorTab === "outline" ? outline : detailPanel}
+            </div>
+          </aside>
+        </div>
+        ${articleHistoryModalHtml(post)}
+      </section>`;
+  }
+
+  function syncArticleEditorChrome(root, post) {
+    if (!root || !post || state.articleMode !== "editor") return;
+
+    const saveButton = root.querySelector('.halo-article-page-actions [data-article-action="save"]');
+    const publishButton = root.querySelector('.halo-article-page-actions [data-article-action="publish"]');
+    const previewButton = root.querySelector('.halo-article-page-actions [data-article-action="toggle-preview"]');
+    const saveLabel = state.articleSavingAction === "save" ? "保存中..." : "保存";
+    const publishLabel = state.articleSavingAction === "publish" ? "发布中..." : "发布";
+    const isSaving = !!state.articleSavingAction;
+
+    if (saveButton) {
+      saveButton.textContent = saveLabel;
+      saveButton.disabled = isSaving;
+    }
+
+    if (publishButton) {
+      publishButton.textContent = publishLabel;
+      publishButton.disabled = isSaving;
+    }
+
+    if (previewButton) {
+      previewButton.textContent = state.articlePreviewMode ? "编辑" : "预览";
+    }
+
+    if (state.articleInspectorTab === "details") {
+      const sidebarBody = root.querySelector(".halo-editor-sidebar-body");
+      if (sidebarBody) {
+        sidebarBody.innerHTML = articleDetailsPanelHtml(post);
+      }
+    }
+  }
+
+  function handleArticlesWorkspaceKeydown(event) {
+    const editor = event.target.closest(".halo-article-editor-canvas");
+    if (!editor || state.articlePreviewMode) return;
+
+    if (event.key === "Backspace" || event.key === "Delete") {
+      const selection = window.getSelection();
+      if (!selection?.rangeCount) return;
+
+      const range = selection.getRangeAt(0);
+      if (!range.collapsed) {
+        const fragment = range.cloneContents();
+        if (fragment.querySelector?.("img")) {
+          event.preventDefault();
+          range.deleteContents();
+          updateArticleSnapshotFromDom();
+        }
+        return;
+      }
+
+      const imageNode =
+        range.startContainer?.nodeType === Node.ELEMENT_NODE
+          ? event.key === "Delete"
+            ? range.startContainer.childNodes[range.startOffset]
+            : range.startContainer.childNodes[range.startOffset - 1]
+          : event.key === "Delete"
+          ? range.startContainer?.nextSibling
+          : range.startContainer?.previousSibling;
+
+      if (imageNode?.nodeType === Node.ELEMENT_NODE && imageNode.tagName === "IMG") {
+        event.preventDefault();
+        imageNode.remove();
+        updateArticleSnapshotFromDom();
+      }
+    }
+  }
+
+  function handleArticlesWorkspaceClick(event) {
+    const trigger = event.target.closest("[data-article-action]");
+    if (!trigger) return;
+
+    const action = trigger.dataset.articleAction;
+    if (action === "close-history") {
+      state.articleHistoryOpen = false;
+      renderArticlesWorkspace();
+      return;
+    }
+
+    if (action === "toggle-preview") {
+      state.articlePreviewMode = !state.articlePreviewMode;
+      renderArticlesWorkspace();
+      return;
+    }
+
+    if (action === "toggle-history") {
+      const post = currentArticle();
+      state.articleHistoryOpen = !state.articleHistoryOpen;
+      if (state.articleHistoryOpen && post) {
+        void loadArticleHistory(post);
+      } else {
+        renderArticlesWorkspace();
+      }
+      return;
+    }
+
+    if (action === "open-post") {
+      setArticleMode("editor", trigger.dataset.slug || "");
+      return;
+    }
+
+    if (action === "back-list") {
+      setArticleMode("list");
+      return;
+    }
+
+    if (action === "retry") {
+      state.articleDataLoaded = false;
+      state.articleDataError = "";
+      ensureArticlesData();
+      return;
+    }
+
+    if (action === "switch-tab") {
+      state.articleInspectorTab = trigger.dataset.tab || "outline";
+      updateArticleSnapshotFromDom();
+      renderArticlesWorkspace();
+      return;
+    }
+
+    if (action === "exec") {
+      runArticleCommand(trigger.dataset.command, trigger.dataset.value || "");
+      return;
+    }
+
+    if (action === "save" || action === "publish") {
+      void saveArticleToGitHub(action);
+      return;
+    }
+
+    if (action === "new-post") {
+      const slug = `draft-${Date.now()}`;
+      const post = normalizeArticleRecord({
+        slug,
+        path: "",
+        draft: true,
+        publishDate: new Date().toISOString(),
+        updateDate: new Date().toISOString(),
+        title: "未命名文章",
+        date: new Date().toISOString(),
+        dateLabel: formatDate(new Date().toISOString()),
+        status: "草稿",
+        author: "XF",
+        tags: ["Halo"],
+        categories: ["默认分类"],
+        excerpt: "",
+        html: "<p></p>",
+        plainText: "",
+        outline: [],
+        rawBody: "",
+      });
+      state.articlePosts.unshift(post);
+      setArticleMode("editor", slug);
+      return;
+    }
+
+    if (action === "notice") {
+      state.articleNotice = trigger.dataset.notice || "功能入口已经预留好了。";
+      renderArticlesWorkspace();
+      return;
+    }
+
+    if (action === "jump-outline") {
+      const text = trigger.dataset.outlineText;
+      const heading = Array.from(
+        document.querySelectorAll(".halo-article-editor-canvas h1, .halo-article-editor-canvas h2, .halo-article-editor-canvas h3")
+      ).find((node) => node.textContent.trim() === text);
+      if (heading) heading.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   }
 
   function ensureSidebar() {
