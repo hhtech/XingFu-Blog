@@ -49,6 +49,7 @@
     articleHistoryError: "",
     articleHistoryItems: [],
     articleHistorySlug: "",
+    pageEditorMode: "split",
     articleNotice: "",
     articleError: "",
     articleSavingAction: "",
@@ -1309,6 +1310,125 @@
     ensureArticlesData();
   }
 
+  function syncPagesPreview(root) {
+    const editor = root.querySelector(".tiptap-editor");
+    const preview = root.querySelector(".tiptap-preview");
+    if (!editor || !preview) return;
+
+    const html = editor.innerHTML.trim();
+    preview.innerHTML = html || '<p class="composer-empty-preview">这里会显示页面预览内容。</p>';
+  }
+
+  function applyPagesEditorMode(root) {
+    const modeButtons = Array.from(root.querySelectorAll(".preview-switcher .mode-button"));
+    const composerContent = root.querySelector(".composer-content");
+    const editorPane = root.querySelector(".editor-pane-inner");
+    const previewPane = root.querySelector(".preview-pane-inner");
+
+    if (!composerContent || !editorPane || !previewPane || !modeButtons.length) return;
+
+    modeButtons.forEach((button) => {
+      const text = buttonText(button);
+      const isActive =
+        (state.pageEditorMode === "split" && text.includes("分栏")) ||
+        (state.pageEditorMode === "edit" && text.includes("编辑")) ||
+        (state.pageEditorMode === "preview" && text.includes("预览"));
+      button.classList.toggle("active", isActive);
+    });
+
+    composerContent.classList.toggle("split", state.pageEditorMode === "split");
+    editorPane.style.display = state.pageEditorMode === "preview" ? "none" : "";
+    previewPane.style.display = state.pageEditorMode === "edit" ? "none" : "";
+  }
+
+  function resetPagesDraft(root) {
+    const titleInput = root.querySelector(".title-input");
+    const slugInput = root.querySelector('input[placeholder="page-slug"]');
+    const dateInput = root.querySelector('input[type="datetime-local"]');
+    const layoutInput = root.querySelector('input[placeholder*="about"]');
+    const menuWeightInput = root.querySelector('input[placeholder="1"]');
+    const menuIconInput = root.querySelector('input[placeholder*="home"]');
+    const menuToggle = root.querySelector('.inspector-pane input[type="checkbox"]');
+    const editor = root.querySelector(".tiptap-editor");
+    const chips = root.querySelectorAll(".editor-chips .chip");
+
+    if (titleInput) titleInput.value = "";
+    if (slugInput) slugInput.value = "";
+    if (dateInput) dateInput.value = formatDateTimeLocal(new Date());
+    if (layoutInput) layoutInput.value = "";
+    if (menuWeightInput) menuWeightInput.value = "";
+    if (menuIconInput) menuIconInput.value = "";
+    if (menuToggle) menuToggle.checked = false;
+    if (chips[0]) {
+      const textNode = Array.from(chips[0].childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
+      if (textNode) {
+        textNode.textContent = "新页面";
+      } else {
+        chips[0].append(document.createTextNode("新页面"));
+      }
+    }
+    if (editor) {
+      editor.innerHTML =
+        '<p data-placeholder="这里编辑页面内容，支持 Markdown、拖拽上传和粘贴截图。" class="is-empty is-editor-empty"><br class="ProseMirror-trailingBreak"></p>';
+    }
+
+    state.pageEditorMode = "edit";
+    syncPagesPreview(root);
+    applyPagesEditorMode(root);
+    titleInput?.focus();
+  }
+
+  function handlePagesWorkspaceClick(event) {
+    const root = event.currentTarget;
+    const button = event.target.closest("button");
+    if (!button) return;
+
+    const text = buttonText(button);
+    if (button.closest(".preview-switcher")) {
+      if (text.includes("分栏")) state.pageEditorMode = "split";
+      if (text.includes("编辑")) state.pageEditorMode = "edit";
+      if (text.includes("预览")) state.pageEditorMode = "preview";
+      syncPagesPreview(root);
+      applyPagesEditorMode(root);
+      return;
+    }
+
+    const heading = button.closest(".section-heading");
+    if (heading && text === "新建") {
+      event.preventDefault();
+      resetPagesDraft(root);
+    }
+  }
+
+  function handlePagesWorkspaceInput(event) {
+    const root = event.currentTarget;
+    const target = event.target;
+    if (target.closest(".tiptap-editor") || target.matches(".title-input, input, textarea")) {
+      syncPagesPreview(root);
+    }
+  }
+
+  function ensurePagesWorkspace() {
+    const main = document.querySelector(".console-main");
+    if (!main || !document.body.classList.contains("view-pages")) return;
+
+    const editorPane = main.querySelector(".editor-pane");
+    if (!editorPane || editorPane.dataset.haloPagesBound === "1") {
+      if (editorPane) {
+        syncPagesPreview(editorPane.closest(".articles-grid") || main);
+        applyPagesEditorMode(editorPane.closest(".articles-grid") || main);
+      }
+      return;
+    }
+
+    const root = editorPane.closest(".articles-grid") || main;
+    editorPane.dataset.haloPagesBound = "1";
+    root.addEventListener("click", handlePagesWorkspaceClick);
+    root.addEventListener("input", handlePagesWorkspaceInput);
+    syncPagesPreview(root);
+    applyPagesEditorMode(root);
+  }
+
   function articleHistoryModalHtml(post) {
     if (!state.articleHistoryOpen) return "";
 
@@ -1746,6 +1866,7 @@
     setViewClasses();
     applyQueryView();
     ensureArticlesWorkspace();
+    ensurePagesWorkspace();
     observer.observe(document.body, { childList: true, subtree: true });
     state.applying = false;
   }
