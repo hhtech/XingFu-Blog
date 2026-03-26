@@ -1820,6 +1820,10 @@
     if (articlesButton && !articlesButton.dataset.haloListReset) {
       articlesButton.dataset.haloListReset = "1";
       articlesButton.addEventListener("click", () => {
+        const requestedPost = new URLSearchParams(window.location.search).get("post");
+        if (requestedPost) {
+          return;
+        }
         state.articleMode = "list";
         state.articleSelectedSlug = "";
         state.articleNotice = "";
@@ -1870,7 +1874,9 @@
       const button = targetLabel && findNavButton(targetLabel);
       if (button) {
         state.queryApplied = true;
-        button.click();
+        if (!button.classList.contains("active")) {
+          button.click();
+        }
       }
     }
 
