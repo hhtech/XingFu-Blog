@@ -19,6 +19,8 @@ nav:
     url: /tags
   - name: 关于
     url: /about
+  - name: 测试
+    url: /post-1774580295984/
 footer:
   copyright:
     owner: Xing Fu' Blog
