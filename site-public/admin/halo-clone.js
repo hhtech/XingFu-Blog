@@ -53,6 +53,9 @@
     articleNotice: "",
     articleError: "",
     articleSavingAction: "",
+    articleSelectionRange: null,
+    articleSelectionBound: false,
+    articleEditorMode: "split",
   };
 
   const articleSource = {
@@ -573,11 +576,256 @@
 
   function resetArticleOverlayState() {
     state.articlePreviewMode = false;
+    state.articleEditorMode = "split";
+    state.articleActiveBlock = null;
     state.articleHistoryOpen = false;
     state.articleHistoryLoading = false;
     state.articleHistoryError = "";
     state.articleHistoryItems = [];
     state.articleHistorySlug = "";
+  }
+
+  function rememberArticleSelection() {
+    const editor = articleEditorElement(document);
+    const selection = window.getSelection();
+    if (!editor || !selection?.rangeCount) return;
+
+    const range = selection.getRangeAt(0);
+    const container =
+      range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+        ? range.commonAncestorContainer
+        : range.commonAncestorContainer.parentElement;
+
+    if (!container || !editor.contains(container)) return;
+    state.articleSelectionRange = range.cloneRange();
+    state.articleActiveBlock = articleBlockFromRange(editor, range) || state.articleActiveBlock;
+  }
+
+  function restoreArticleSelection(editor) {
+    if (!editor || !state.articleSelectionRange) return false;
+
+    const selection = window.getSelection();
+    if (!selection) return false;
+
+    const range = state.articleSelectionRange;
+    const startContainer =
+      range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentElement;
+    const endContainer =
+      range.endContainer.nodeType === Node.ELEMENT_NODE ? range.endContainer : range.endContainer.parentElement;
+
+    if (!startContainer || !endContainer || !editor.contains(startContainer) || !editor.contains(endContainer)) {
+      return false;
+    }
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }
+
+  function articleEditorElement(root = document) {
+    return root.querySelector(".halo-article-editor-view .tiptap-editor, .halo-article-editor-canvas, .tiptap-editor");
+  }
+
+  function articlePreviewElement(root = document) {
+    return root.querySelector(".halo-article-editor-view .tiptap-preview, .tiptap-preview");
+  }
+
+  function syncArticlePreview(root = document) {
+    const editor = articleEditorElement(root);
+    const preview = articlePreviewElement(root);
+    if (!editor || !preview) return;
+    const html = editor.innerHTML.trim();
+    preview.innerHTML = html || '<p class="composer-empty-preview">这里会显示文章预览内容。</p>';
+  }
+
+  function applyArticleEditorMode(root = document) {
+    const workspace = root.querySelector(".halo-article-editor-workspace");
+    if (!workspace) return;
+
+    const modeButtons = Array.from(workspace.querySelectorAll(".preview-switcher .mode-button"));
+    const composerContent = workspace.querySelector(".composer-content");
+    const editorPane = workspace.querySelector(".editor-pane-inner");
+    const previewPane = workspace.querySelector(".preview-pane-inner");
+    const editor = articleEditorElement(workspace);
+
+    if (!composerContent || !editorPane || !previewPane || !editor) return;
+
+    modeButtons.forEach((button) => {
+      button.classList.toggle("active", button.dataset.mode === state.articleEditorMode);
+    });
+
+    composerContent.classList.toggle("split", state.articleEditorMode === "split");
+    editorPane.style.display = state.articleEditorMode === "preview" ? "none" : "";
+    previewPane.style.display = state.articleEditorMode === "edit" ? "none" : "";
+    editor.contentEditable = state.articleEditorMode === "preview" ? "false" : "true";
+    editor.classList.toggle("is-preview", state.articleEditorMode === "preview");
+  }
+
+  function currentArticleRange(editor) {
+    const selection = window.getSelection();
+    if (selection?.rangeCount) {
+      const range = selection.getRangeAt(0);
+      const container =
+        range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+          ? range.commonAncestorContainer
+          : range.commonAncestorContainer.parentElement;
+      if (container && editor.contains(container)) return range;
+    }
+
+    if (restoreArticleSelection(editor)) {
+      const restoredSelection = window.getSelection();
+      if (restoredSelection?.rangeCount) return restoredSelection.getRangeAt(0);
+    }
+
+    const fallbackBlock = Array.from(editor.querySelectorAll("li, p, h1, h2, h3, blockquote"))
+      .find((node) => node.textContent.trim());
+    if (fallbackBlock) {
+      const walker = document.createTreeWalker(fallbackBlock, NodeFilter.SHOW_TEXT);
+      const textNode = walker.nextNode();
+      if (textNode) {
+        const range = document.createRange();
+        range.setStart(textNode, 0);
+        range.setEnd(textNode, textNode.textContent.length);
+        const nextSelection = window.getSelection();
+        nextSelection?.removeAllRanges();
+        nextSelection?.addRange(range);
+        state.articleSelectionRange = range.cloneRange();
+        return range;
+      }
+    }
+
+    return null;
+  }
+
+  function currentArticleBlock(editor) {
+    const normalizeBlock = (node) => {
+      if (!node || !editor.contains(node)) return null;
+      let current = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+      while (current && current.parentElement && current.parentElement !== editor) {
+        current = current.parentElement;
+      }
+      return current && current !== editor ? current : null;
+    };
+
+    const range = currentArticleRange(editor);
+    const blockFromSelection = normalizeBlock(articleBlockFromRange(editor, range));
+    if (blockFromSelection) {
+      state.articleActiveBlock = blockFromSelection;
+      return blockFromSelection;
+    }
+
+    const activeBlock = normalizeBlock(state.articleActiveBlock);
+    if (activeBlock) {
+      state.articleActiveBlock = activeBlock;
+      return activeBlock;
+    }
+
+    const fallbackBlock = Array.from(editor.children).find((node) => node.textContent.trim() || node.querySelector("img, video, audio, iframe"));
+    if (fallbackBlock) {
+      state.articleActiveBlock = fallbackBlock;
+      return fallbackBlock;
+    }
+
+    return null;
+  }
+
+  function articleBlockFromRange(editor, range) {
+    if (!range) return null;
+    let node = range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentElement;
+    if (!node || !editor.contains(node)) return null;
+    return node.closest("p, li, blockquote, h1, h2, h3, div");
+  }
+
+  function replaceTagName(element, tagName) {
+    if (!element || element.tagName.toLowerCase() === tagName.toLowerCase()) return element;
+    const next = document.createElement(tagName);
+    Array.from(element.attributes).forEach((attr) => next.setAttribute(attr.name, attr.value));
+    next.innerHTML = element.innerHTML;
+    element.replaceWith(next);
+    return next;
+  }
+
+  function applyArticleBlockFormat(editor, tagName) {
+    const block = currentArticleBlock(editor);
+    if (!block) return false;
+
+    if (block.tagName.toLowerCase() === "li") {
+      const quote = block.closest("blockquote");
+      if (quote && editor.contains(quote)) {
+        const replacement = document.createElement(tagName);
+        replacement.innerHTML = block.innerHTML;
+        quote.replaceWith(replacement);
+        state.articleActiveBlock = replacement;
+        return true;
+      }
+    }
+
+    if (block.tagName.toLowerCase() === "li") {
+      const list = block.parentElement;
+      if (list?.tagName?.match(/^(ul|ol)$/i)) {
+        const replacement = document.createElement(tagName);
+        replacement.innerHTML = block.innerHTML;
+        list.replaceWith(replacement);
+        state.articleActiveBlock = replacement;
+        return true;
+      }
+    }
+
+    state.articleActiveBlock = replaceTagName(block, tagName);
+    return true;
+  }
+
+  function applyArticleAlignment(editor, align) {
+    const block = currentArticleBlock(editor);
+    if (!block) return false;
+    block.style.textAlign = align;
+    state.articleActiveBlock = block;
+    return true;
+  }
+
+  function toggleArticleList(editor, type) {
+    const block = currentArticleBlock(editor);
+    if (!block) return false;
+
+    if (block.tagName.toLowerCase() === "li") {
+      const quote = block.closest("blockquote");
+      if (quote && editor.contains(quote)) {
+        const list = document.createElement(type);
+        const item = document.createElement("li");
+        item.innerHTML = block.innerHTML;
+        list.appendChild(item);
+        quote.replaceWith(list);
+        state.articleActiveBlock = item;
+        return true;
+      }
+    }
+
+    if (block.tagName.toLowerCase() === "li") {
+      const list = block.parentElement;
+      if (list?.tagName?.toLowerCase() === type) {
+        const paragraph = document.createElement("p");
+        paragraph.innerHTML = block.innerHTML;
+        list.replaceWith(paragraph);
+        state.articleActiveBlock = paragraph;
+        return true;
+      }
+
+      if (list?.tagName?.match(/^(ul|ol)$/i)) {
+        const nextList = document.createElement(type);
+        nextList.innerHTML = list.innerHTML;
+        list.replaceWith(nextList);
+        state.articleActiveBlock = nextList.querySelector("li") || nextList;
+        return true;
+      }
+    }
+
+    const list = document.createElement(type);
+    const item = document.createElement("li");
+    item.innerHTML = block.innerHTML;
+    list.appendChild(item);
+    block.replaceWith(list);
+    state.articleActiveBlock = item;
+    return true;
   }
 
   function syncArticleQuery() {
@@ -887,107 +1135,138 @@
       : '<div class="halo-outline-empty">暂无大纲</div>';
 
     const detailPanel = `
-      <div class="halo-article-meta-group">
-        <label><span>Slug</span><input value="${escapeHtml(post.slug)}" readonly /></label>
-        <label><span>发布日期</span><input value="${escapeHtml(post.dateLabel)}" readonly /></label>
+      <div class="section-heading split">
+        <span class="title-inline">文章设置</span>
+        <button type="button" class="ghost-button small-button" data-article-action="switch-tab" data-tab="outline">大纲</button>
       </div>
-      <label><span>分类</span><input value="${escapeHtml(post.categories.join(" / ") || "默认分类")}" readonly /></label>
-      <label><span>标签</span><input value="${escapeHtml(post.tags.join(" / ") || "未设置标签")}" readonly /></label>
-      <label><span>附件</span><input value="图片素材、封面和媒体入口预留中" readonly /></label>
-      <label><span>文章摘要</span><textarea class="summary-textarea" readonly>${escapeHtml(post.excerpt)}</textarea></label>`;
+      <label><span>标题</span><input value="${escapeHtml(post.title)}" data-article-input="title" /></label>
+      <label><span>Slug</span><input value="${escapeHtml(post.slug)}" ${post.path ? "readonly" : ""} data-article-input="slug" /></label>
+      <label><span>发布时间</span><input type="datetime-local" value="${escapeHtml(formatDateTimeLocal(post.publishDate || post.date))}" data-article-input="publishDate" /></label>
+      <label><span>分类</span><input value="${escapeHtml(post.categories.join(", "))}" data-article-input="categories" /></label>
+      <label><span>标签</span><input value="${escapeHtml(post.tags.join(", "))}" data-article-input="tags" /></label>
+      <label><span>封面</span><input value="${escapeHtml(post.coverImage || "")}" data-article-input="coverImage" /></label>
+      <label><span>关键字</span><input value="${escapeHtml(post.keywords.join(", "))}" data-article-input="keywords" /></label>
+      <label><span>别名</span><input value="${escapeHtml(post.aliases.join(", "))}" data-article-input="aliases" /></label>
+      <label><span>摘要</span><textarea class="summary-textarea" data-article-input="description">${escapeHtml(post.description || "")}</textarea></label>`;
+
+    const outlinePanel = `
+      <div class="section-heading split">
+        <span class="title-inline">文章大纲</span>
+        <button type="button" class="ghost-button small-button" data-article-action="switch-tab" data-tab="details">设置</button>
+      </div>
+      <div class="post-list">${outline}</div>`;
 
     return `
-      <section class="halo-article-editor-view">
-        <div class="halo-article-pagebar">
-          <div class="halo-article-heading"><button type="button" class="halo-back-button" data-article-action="back-list">返回列表</button><span class="halo-article-heading-icon">[]</span><h2>文章</h2></div>
-          <div class="halo-article-page-actions">
-            <button type="button" class="secondary-button small-button" data-article-action="notice" data-notice="版本历史会在接入 GitHub 写回后继续补上。">版本历史</button>
-            <button type="button" class="secondary-button small-button" data-article-action="notice" data-notice="当前是编辑模式，后续可以接前台预览链接。">预览</button>
-            <button type="button" class="secondary-button small-button" data-article-action="notice" data-notice="当前编辑是本地浏览器态，接入 Token 后可继续做仓库保存。">保存</button>
-            <button type="button" class="secondary-button small-button" data-article-action="switch-tab" data-tab="details">设置</button>
-            <button type="button" class="halo-dark-button" data-article-action="notice" data-notice="发布按钮已对齐 Halo 位置，后面可以继续接入真实发布逻辑。">发布</button>
+      <section class="articles-grid halo-article-editor-workspace">
+        <aside class="surface-card browser-pane">
+          <div class="section-heading split">
+            <span class="title-inline">当前文章</span>
+            <button type="button" class="ghost-button small-button" data-article-action="back-list">返回列表</button>
           </div>
-        </div>
-        <div class="halo-editor-toolbar">
-          <button type="button" class="halo-toolbar-dot" title="文章操作"></button>
-          <button type="button" data-article-action="exec" data-command="undo">↶</button>
-          <button type="button" data-article-action="exec" data-command="redo">↷</button>
-          <button type="button" data-article-action="exec" data-command="removeFormat">Tx</button>
-          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="H1">H1</button>
-          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="H2">H2</button>
-          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="P">正文</button>
-          <button type="button" data-article-action="exec" data-command="bold">B</button>
-          <button type="button" data-article-action="exec" data-command="italic">I</button>
-          <button type="button" data-article-action="exec" data-command="underline">U</button>
-          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="BLOCKQUOTE">引</button>
-          <button type="button" data-article-action="exec" data-command="insertUnorderedList">•</button>
-          <button type="button" data-article-action="exec" data-command="insertOrderedList">1.</button>
-          <button type="button" data-article-action="exec" data-command="justifyLeft">左</button>
-          <button type="button" data-article-action="exec" data-command="justifyCenter">中</button>
-          <button type="button" data-article-action="exec" data-command="justifyRight">右</button>
-        </div>
-        <div class="halo-editor-layout">
-          <section class="halo-editor-main">
-            <input class="halo-article-title-input" value="${escapeHtml(post.title)}" data-article-input="title" />
-            <div class="halo-editor-divider"></div>
-            <div class="halo-article-editor-canvas" contenteditable="true" data-article-input="body">${post.html}</div>
-          </section>
-          <aside class="halo-editor-sidebar">
-            <div class="halo-editor-sidebar-tabs">
-              <button type="button" class="${state.articleInspectorTab === "outline" ? "active" : ""}" data-article-action="switch-tab" data-tab="outline">大纲</button>
-              <button type="button" class="${state.articleInspectorTab === "details" ? "active" : ""}" data-article-action="switch-tab" data-tab="details">详情</button>
+          <div class="post-list">
+            <button class="post-card active" type="button">
+              <strong>${escapeHtml(post.title)}</strong>
+              <span>${escapeHtml(post.dateLabel)}</span>
+            </button>
+          </div>
+        </aside>
+        <section class="surface-card editor-pane">
+          <div class="editor-topbar">
+            <div class="editor-heading">
+              <input class="title-input" placeholder="输入文章标题" value="${escapeHtml(post.title)}" data-article-input="title" />
+              <div class="editor-chips">
+                <span class="chip">文章</span>
+                <span class="chip">${escapeHtml(post.status || "草稿")}</span>
+              </div>
             </div>
-            <div class="halo-editor-sidebar-body">
-              ${state.articleInspectorTab === "outline" ? outline : detailPanel}
+            <div class="preview-switcher">
+              <button type="button" class="mode-button ${state.articleEditorMode === "split" ? "active" : ""}" data-mode="split">分栏</button>
+              <button type="button" class="mode-button ${state.articleEditorMode === "edit" ? "active" : ""}" data-mode="edit">编辑</button>
+              <button type="button" class="mode-button ${state.articleEditorMode === "preview" ? "active" : ""}" data-mode="preview">预览</button>
             </div>
-          </aside>
-        </div>
+          </div>
+          <div class="editor-body">
+            <div class="markdown-composer">
+              <div class="editor-assistbar compact">
+                <div class="editor-assistbar-actions">
+                  <button type="button" class="secondary-button small-button" data-article-action="toggle-history">版本历史</button>
+                  <button type="button" class="secondary-button small-button" data-article-action="save">保存</button>
+                  <button type="button" class="halo-dark-button" data-article-action="publish">发布</button>
+                </div>
+                <div class="editor-assistbar-status">
+                  <span>文章编辑区已经切换为和页面管理一致的富文本工作台。</span>
+                </div>
+              </div>
+              <div class="composer-shell">
+                <div class="composer-toolbar">
+                  <div class="composer-toolbar-group">
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="undo" title="撤销" aria-label="撤销">↶</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="redo" title="重做" aria-label="重做">↷</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="formatBlock" data-value="H1" title="一级标题" aria-label="一级标题">H1</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="formatBlock" data-value="H2" title="二级标题" aria-label="二级标题">H2</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="formatBlock" data-value="P" title="正文" aria-label="正文">正文</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="bold" title="加粗" aria-label="加粗">B</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="italic" title="斜体" aria-label="斜体">I</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="underline" title="下划线" aria-label="下划线">U</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="formatBlock" data-value="BLOCKQUOTE" title="引用" aria-label="引用">引</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="insertUnorderedList" title="无序列表" aria-label="无序列表">•</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="insertOrderedList" title="有序列表" aria-label="有序列表">1.</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="justifyLeft" title="左对齐" aria-label="左对齐">左</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="justifyCenter" title="居中" aria-label="居中">中</button>
+                    <button type="button" class="composer-icon-button" data-article-action="exec" data-command="justifyRight" title="右对齐" aria-label="右对齐">右</button>
+                  </div>
+                </div>
+                <div class="composer-content ${state.articleEditorMode === "split" ? "split" : ""}">
+                  <div class="composer-workbench">
+                    <div class="composer-pane editor-pane-inner">
+                      <div class="composer-pane-title">编辑器</div>
+                      <div class="tiptap-editor" contenteditable="${state.articleEditorMode === "preview" ? "false" : "true"}" data-article-input="body">${post.html}</div>
+                    </div>
+                    <div class="composer-pane preview-pane-inner">
+                      <div class="composer-pane-title">预览</div>
+                      <div class="tiptap-preview">${post.html}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <aside class="surface-card inspector-pane">
+          ${state.articleInspectorTab === "outline" ? outlinePanel : detailPanel}
+        </aside>
+        ${articleHistoryModalHtml(post)}
       </section>`;
-  }
-
-  function articleDetailsPanelHtml(post) {
-    return `
-      <div class="halo-article-meta-group">
-        <label><span>Slug</span><input value="${escapeHtml(post.slug)}" ${post.path ? "readonly" : ""} data-article-input="slug" /></label>
-        <label><span>发布时间</span><input type="datetime-local" value="${escapeHtml(formatDateTimeLocal(post.publishDate || post.date))}" data-article-input="publishDate" /></label>
-      </div>
-      <label><span>分类</span><input value="${escapeHtml(post.categories.join(", "))}" placeholder="默认分类, 诗词" data-article-input="categories" /></label>
-      <label><span>标签</span><input value="${escapeHtml(post.tags.join(", "))}" placeholder="Halo, 随笔" data-article-input="tags" /></label>
-      <label><span>封面</span><input value="${escapeHtml(post.coverImage || "")}" placeholder="https://..." data-article-input="coverImage" /></label>
-      <label><span>关键词</span><input value="${escapeHtml(post.keywords.join(", "))}" placeholder="关键词 1, 关键词 2" data-article-input="keywords" /></label>
-      <label><span>别名</span><input value="${escapeHtml(post.aliases.join(", "))}" placeholder="/posts/demo" data-article-input="aliases" /></label>
-      <label><span>权重</span><input type="number" value="${escapeHtml(String(post.weight || ""))}" placeholder="0" data-article-input="weight" /></label>
-      <label><span>文章摘要</span><textarea class="summary-textarea" placeholder="这里会写入 frontmatter description" data-article-input="description">${escapeHtml(post.description || "")}</textarea></label>`;
   }
 
   function syncArticleEditorChrome(root, post) {
     if (!root || !post || state.articleMode !== "editor") return;
 
-    const actionButtons = root.querySelectorAll(".halo-article-page-actions button");
-    const saveButton = actionButtons[2];
-    const publishButton = actionButtons[actionButtons.length - 1];
+    const saveButton = root.querySelector('[data-article-action="save"]');
+    const publishButton = root.querySelector('[data-article-action="publish"]');
     const saveLabel = state.articleSavingAction === "save" ? "保存中..." : "保存";
     const publishLabel = state.articleSavingAction === "publish" ? "发布中..." : "发布";
     const isSaving = !!state.articleSavingAction;
 
     if (saveButton) {
-      saveButton.dataset.articleAction = "save";
-      saveButton.dataset.notice = "";
       saveButton.textContent = saveLabel;
       saveButton.disabled = isSaving;
     }
 
     if (publishButton) {
-      publishButton.dataset.articleAction = "publish";
-      publishButton.dataset.notice = "";
       publishButton.textContent = publishLabel;
       publishButton.disabled = isSaving;
     }
 
+    const modeButtons = Array.from(root.querySelectorAll('.preview-switcher .mode-button'));
+    modeButtons.forEach((button) => {
+      button.classList.toggle('active', button.dataset.mode === state.articleEditorMode);
+    });
+
     if (state.articleInspectorTab === "details") {
-      const sidebarBody = root.querySelector(".halo-editor-sidebar-body");
-      if (sidebarBody) {
-        sidebarBody.innerHTML = articleDetailsPanelHtml(post);
+      const inspector = root.querySelector('.inspector-pane');
+      if (inspector) {
+        inspector.innerHTML = articleDetailsPanelHtml(post);
       }
     }
   }
@@ -1033,6 +1312,8 @@
       banner +
       (state.articleMode === "editor" && post ? articleEditorViewHtml(post) : articleListViewHtml());
     syncArticleEditorChrome(root, post);
+    syncArticlePreview(root);
+    applyArticleEditorMode(root);
   }
 
   function updateArticleSnapshotFromDom() {
@@ -1041,8 +1322,8 @@
     if (!post || !root) return;
 
     const previousSlug = post.slug;
-    const titleInput = root.querySelector(".halo-article-title-input");
-    const editorCanvas = root.querySelector(".halo-article-editor-canvas");
+    const titleInput = root.querySelector(".halo-article-title-input, .title-input");
+    const editorCanvas = articleEditorElement(root);
     const slugInput = root.querySelector('[data-article-input="slug"]');
     const publishDateInput = root.querySelector('[data-article-input="publishDate"]');
     const categoriesInput = root.querySelector('[data-article-input="categories"]');
@@ -1167,99 +1448,265 @@
   }
 
   function runArticleCommand(command, value) {
-    const editor = document.querySelector(".halo-article-editor-canvas");
+    const editor = articleEditorElement(document);
     if (!editor) return;
-    editor.focus();
+    const block = currentArticleBlock(editor);
+    const extractBlockHtml = (node) => {
+      if (!node) return "";
+      const firstListItem = node.matches("blockquote, ul, ol") ? node.querySelector("li") : null;
+      if (firstListItem) return firstListItem.innerHTML;
+      return node.innerHTML;
+    };
+    const replaceTopLevelBlock = (node, tagName) => {
+      if (!node) return null;
+      const next = document.createElement(tagName);
+      next.innerHTML = extractBlockHtml(node);
+      next.style.textAlign = node.style.textAlign || "";
+      node.replaceWith(next);
+      state.articleActiveBlock = next;
+      return next;
+    };
 
-    if (command === "formatBlock") {
-      document.execCommand(command, false, value);
-    } else {
-      document.execCommand(command, false);
+    let handled = false;
+    if (block && command === "formatBlock" && value) {
+      const tagMap = { H1: "h1", H2: "h2", P: "p", BLOCKQUOTE: "blockquote" };
+      const targetTag = tagMap[String(value).toUpperCase()];
+      if (targetTag) {
+        replaceTopLevelBlock(block, targetTag);
+        handled = true;
+      }
+    } else if (block && command === "justifyLeft") {
+      block.style.textAlign = "left";
+      state.articleActiveBlock = block;
+      handled = true;
+    } else if (block && command === "justifyCenter") {
+      block.style.textAlign = "center";
+      state.articleActiveBlock = block;
+      handled = true;
+    } else if (block && command === "justifyRight") {
+      block.style.textAlign = "right";
+      state.articleActiveBlock = block;
+      handled = true;
+    } else if (block && (command === "insertUnorderedList" || command === "insertOrderedList")) {
+      const targetTag = command === "insertUnorderedList" ? "ul" : "ol";
+      if (block.matches("ul, ol")) {
+        if (block.tagName.toLowerCase() === targetTag) {
+          replaceTopLevelBlock(block, "p");
+        } else {
+          const nextList = document.createElement(targetTag);
+          nextList.innerHTML = block.innerHTML;
+          block.replaceWith(nextList);
+          state.articleActiveBlock = nextList;
+        }
+      } else {
+        const list = document.createElement(targetTag);
+        const item = document.createElement("li");
+        item.innerHTML = extractBlockHtml(block);
+        list.appendChild(item);
+        list.style.textAlign = block.style.textAlign || "";
+        block.replaceWith(list);
+        state.articleActiveBlock = list;
+      }
+      handled = true;
     }
 
-    window.requestAnimationFrame(() => {
-      updateArticleSnapshotFromDom();
-      if (state.articleInspectorTab === "outline") renderArticlesWorkspace();
-    });
+    if (!handled) {
+      editor.focus();
+      restoreArticleSelection(editor);
+      if (command === "formatBlock") {
+        document.execCommand(command, false, value);
+      } else {
+        document.execCommand(command, false);
+      }
+      rememberArticleSelection();
+    }
+
+    updateArticleSnapshotFromDom();
+    syncArticlePreview(document);
+    if (state.articleInspectorTab === "outline") {
+      renderArticlesWorkspace();
+    }
+  }
+
+  function handleArticlesWorkspaceMouseDown(event) {
+    const trigger = event.target.closest('[data-article-action="exec"]');
+    if (!trigger) return;
+    event.preventDefault();
+  }
+
+  function clearSelectedArticleImage(root = document) {
+    const editor = articleEditorElement(root);
+    editor?.querySelectorAll('img.halo-selected-image').forEach((image) => image.classList.remove('halo-selected-image'));
+  }
+
+  function handleArticlesWorkspaceKeydown(event) {
+    const editor = event.target.closest('.tiptap-editor, .halo-article-editor-canvas');
+    if (!editor || state.articleEditorMode === 'preview') return;
+
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      const selectedImage = editor.querySelector('img.halo-selected-image');
+      if (selectedImage) {
+        event.preventDefault();
+        selectedImage.remove();
+        updateArticleSnapshotFromDom();
+        syncArticlePreview(document);
+        return;
+      }
+
+      const selection = window.getSelection();
+      if (!selection?.rangeCount) return;
+
+      const range = selection.getRangeAt(0);
+      if (!range.collapsed) {
+        const fragment = range.cloneContents();
+        if (fragment.querySelector?.('img')) {
+          event.preventDefault();
+          range.deleteContents();
+          updateArticleSnapshotFromDom();
+          syncArticlePreview(document);
+        }
+        return;
+      }
+
+      const imageNode =
+        range.startContainer?.nodeType === Node.ELEMENT_NODE
+          ? event.key === 'Delete'
+            ? range.startContainer.childNodes[range.startOffset]
+            : range.startContainer.childNodes[range.startOffset - 1]
+          : event.key === 'Delete'
+          ? range.startContainer?.nextSibling
+          : range.startContainer?.previousSibling;
+
+      if (imageNode?.nodeType === Node.ELEMENT_NODE && imageNode.tagName === 'IMG') {
+        event.preventDefault();
+        imageNode.remove();
+        updateArticleSnapshotFromDom();
+        syncArticlePreview(document);
+      }
+    }
   }
 
   function handleArticlesWorkspaceClick(event) {
-    const trigger = event.target.closest("[data-article-action]");
+    const modeButton = event.target.closest('.preview-switcher .mode-button');
+    if (modeButton) {
+      const mode = modeButton.dataset.mode;
+      if (mode && mode !== state.articleEditorMode) {
+        state.articleEditorMode = mode;
+        syncArticlePreview(document);
+        applyArticleEditorMode(document);
+      }
+      return;
+    }
+
+    const image = event.target.closest('.tiptap-editor img, .halo-article-editor-canvas img');
+    if (image) {
+      clearSelectedArticleImage(document);
+      image.classList.add('halo-selected-image');
+      state.articleActiveBlock = image.closest('p, li, blockquote, h1, h2, h3, div');
+      image.closest('.tiptap-editor, .halo-article-editor-canvas')?.focus();
+      event.preventDefault();
+      return;
+    }
+
+    if (event.target.closest('.tiptap-editor, .halo-article-editor-canvas')) {
+      state.articleActiveBlock = event.target.closest('p, li, blockquote, h1, h2, h3, div');
+      clearSelectedArticleImage(document);
+    }
+
+    const trigger = event.target.closest('[data-article-action]');
     if (!trigger) return;
 
     const action = trigger.dataset.articleAction;
-    if (action === "open-post") {
-      setArticleMode("editor", trigger.dataset.slug || "");
+    if (action === 'close-history') {
+      state.articleHistoryOpen = false;
+      renderArticlesWorkspace();
       return;
     }
 
-    if (action === "back-list") {
-      setArticleMode("list");
+    if (action === 'toggle-history') {
+      const post = currentArticle();
+      state.articleHistoryOpen = !state.articleHistoryOpen;
+      if (state.articleHistoryOpen && post) {
+        void loadArticleHistory(post);
+      } else {
+        renderArticlesWorkspace();
+      }
       return;
     }
 
-    if (action === "retry") {
+    if (action === 'open-post') {
+      setArticleMode('editor', trigger.dataset.slug || '');
+      return;
+    }
+
+    if (action === 'back-list') {
+      setArticleMode('list');
+      return;
+    }
+
+    if (action === 'retry') {
       state.articleDataLoaded = false;
-      state.articleDataError = "";
+      state.articleDataError = '';
       ensureArticlesData();
       return;
     }
 
-    if (action === "switch-tab") {
-      state.articleInspectorTab = trigger.dataset.tab || "outline";
+    if (action === 'switch-tab') {
+      state.articleInspectorTab = trigger.dataset.tab || 'outline';
       updateArticleSnapshotFromDom();
       renderArticlesWorkspace();
       return;
     }
 
-    if (action === "exec") {
-      runArticleCommand(trigger.dataset.command, trigger.dataset.value || "");
+    if (action === 'exec') {
+      runArticleCommand(trigger.dataset.command, trigger.dataset.value || '');
+      syncArticlePreview(document);
       return;
     }
 
-    if (action === "save" || action === "publish") {
+    if (action === 'save' || action === 'publish') {
       void saveArticleToGitHub(action);
       return;
     }
 
-    if (action === "new-post") {
+    if (action === 'new-post') {
       const slug = `draft-${Date.now()}`;
       const post = normalizeArticleRecord({
         slug,
-        path: "",
+        path: '',
         draft: true,
         publishDate: new Date().toISOString(),
         updateDate: new Date().toISOString(),
-        title: "未命名文章",
+        title: '?????',
         date: new Date().toISOString(),
         dateLabel: formatDate(new Date().toISOString()),
-        status: "草稿",
-        author: "XF",
-        tags: ["Halo"],
-        categories: ["默认分类"],
-        excerpt: "",
-        html: "<p></p>",
-        plainText: "",
+        status: '??',
+        author: 'XF',
+        tags: ['Halo'],
+        categories: ['????'],
+        excerpt: '',
+        html: '<p></p>',
+        plainText: '',
         outline: [],
-        rawBody: "",
+        rawBody: '',
       });
       state.articlePosts.unshift(post);
-      setArticleMode("editor", slug);
+      setArticleMode('editor', slug);
       return;
     }
 
-    if (action === "notice") {
-      state.articleNotice = trigger.dataset.notice || "功能入口已经预留好了。";
+    if (action === 'notice') {
+      state.articleNotice = trigger.dataset.notice || '???????????';
       renderArticlesWorkspace();
       return;
     }
 
-    if (action === "jump-outline") {
+    if (action === 'jump-outline') {
       const text = trigger.dataset.outlineText;
-      const heading = Array.from(document.querySelectorAll(".halo-article-editor-canvas h1, .halo-article-editor-canvas h2, .halo-article-editor-canvas h3")).find(
-        (node) => node.textContent.trim() === text
-      );
-      if (heading) heading.scrollIntoView({ behavior: "smooth", block: "center" });
+      const heading = Array.from(
+        document.querySelectorAll('.tiptap-editor h1, .tiptap-editor h2, .tiptap-editor h3, .halo-article-editor-canvas h1, .halo-article-editor-canvas h2, .halo-article-editor-canvas h3')
+      ).find((node) => node.textContent.trim() === text);
+      if (heading) heading.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
 
@@ -1287,6 +1734,9 @@
       inputType === "description"
     ) {
       updateArticleSnapshotFromDom();
+      if (inputType === "body") {
+        syncArticlePreview(document);
+      }
     }
   }
 
@@ -1307,6 +1757,7 @@
     if (!root) {
       root = document.createElement("section");
       root.className = "halo-articles-root";
+      root.addEventListener("mousedown", handleArticlesWorkspaceMouseDown);
       root.addEventListener("click", handleArticlesWorkspaceClick);
       root.addEventListener("input", handleArticlesWorkspaceInput);
       root.addEventListener("keydown", handleArticlesWorkspaceKeydown);
@@ -1315,6 +1766,11 @@
 
     renderArticlesWorkspace();
     ensureArticlesData();
+
+    if (!state.articleSelectionBound) {
+      document.addEventListener("selectionchange", rememberArticleSelection);
+      state.articleSelectionBound = true;
+    }
   }
 
   function syncPagesPreview(root) {
@@ -1475,281 +1931,6 @@
           ${body}
         </section>
       </div>`;
-  }
-
-  function articleEditorViewHtml(post) {
-    const outline = post.outline.length
-      ? post.outline
-          .map(
-            (item) => `<button type="button" class="halo-outline-item level-${item.level}" data-article-action="jump-outline" data-outline-text="${escapeHtml(
-              item.text
-            )}">${escapeHtml(item.text)}</button>`
-          )
-          .join("")
-      : '<div class="halo-outline-empty">暂无大纲</div>';
-
-    const detailPanel = `
-      <div class="halo-article-meta-group">
-        <label><span>Slug</span><input value="${escapeHtml(post.slug)}" readonly /></label>
-        <label><span>发布时间</span><input value="${escapeHtml(post.dateLabel)}" readonly /></label>
-      </div>
-      <label><span>分类</span><input value="${escapeHtml(post.categories.join(" / ") || "默认分类")}" readonly /></label>
-      <label><span>标签</span><input value="${escapeHtml(post.tags.join(" / ") || "未设置标签")}" readonly /></label>
-      <label><span>附件</span><input value="图片素材、封面和媒体入口预留中" readonly /></label>
-      <label><span>文章摘要</span><textarea class="summary-textarea" readonly>${escapeHtml(post.excerpt)}</textarea></label>`;
-
-    const previewLabel = state.articlePreviewMode ? "编辑" : "预览";
-    const toolbarDisabled = state.articlePreviewMode ? " disabled" : "";
-
-    return `
-      <section class="halo-article-editor-view">
-        <div class="halo-article-pagebar">
-          <div class="halo-article-heading"><button type="button" class="halo-back-button" data-article-action="back-list">返回列表</button><span class="halo-article-heading-icon">[]</span><h2>文章</h2></div>
-          <div class="halo-article-page-actions">
-            <button type="button" class="secondary-button small-button" data-article-action="toggle-history">版本历史</button>
-            <button type="button" class="secondary-button small-button" data-article-action="toggle-preview">${previewLabel}</button>
-            <button type="button" class="secondary-button small-button" data-article-action="save">保存</button>
-            <button type="button" class="secondary-button small-button" data-article-action="switch-tab" data-tab="details">设置</button>
-            <button type="button" class="halo-dark-button" data-article-action="publish">发布</button>
-          </div>
-        </div>
-        <div class="halo-editor-toolbar">
-          <button type="button" class="halo-toolbar-dot" title="文章操作"></button>
-          <button type="button" data-article-action="exec" data-command="undo"${toolbarDisabled}>↶</button>
-          <button type="button" data-article-action="exec" data-command="redo"${toolbarDisabled}>↷</button>
-          <button type="button" data-article-action="exec" data-command="removeFormat"${toolbarDisabled}>Tx</button>
-          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="H1"${toolbarDisabled}>H1</button>
-          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="H2"${toolbarDisabled}>H2</button>
-          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="P"${toolbarDisabled}>正文</button>
-          <button type="button" data-article-action="exec" data-command="bold"${toolbarDisabled}>B</button>
-          <button type="button" data-article-action="exec" data-command="italic"${toolbarDisabled}>I</button>
-          <button type="button" data-article-action="exec" data-command="underline"${toolbarDisabled}>U</button>
-          <button type="button" data-article-action="exec" data-command="formatBlock" data-value="BLOCKQUOTE"${toolbarDisabled}>引</button>
-          <button type="button" data-article-action="exec" data-command="insertUnorderedList"${toolbarDisabled}>•</button>
-          <button type="button" data-article-action="exec" data-command="insertOrderedList"${toolbarDisabled}>1.</button>
-          <button type="button" data-article-action="exec" data-command="justifyLeft"${toolbarDisabled}>左</button>
-          <button type="button" data-article-action="exec" data-command="justifyCenter"${toolbarDisabled}>中</button>
-          <button type="button" data-article-action="exec" data-command="justifyRight"${toolbarDisabled}>右</button>
-        </div>
-        <div class="halo-editor-layout">
-          <section class="halo-editor-main">
-            <input class="halo-article-title-input" value="${escapeHtml(post.title)}" data-article-input="title" />
-            <div class="halo-editor-divider"></div>
-            <div class="halo-article-editor-canvas ${state.articlePreviewMode ? "is-preview" : ""}" contenteditable="${
-              state.articlePreviewMode ? "false" : "true"
-            }" data-article-input="body">${post.html}</div>
-          </section>
-          <aside class="halo-editor-sidebar">
-            <div class="halo-editor-sidebar-tabs">
-              <button type="button" class="${state.articleInspectorTab === "outline" ? "active" : ""}" data-article-action="switch-tab" data-tab="outline">大纲</button>
-              <button type="button" class="${state.articleInspectorTab === "details" ? "active" : ""}" data-article-action="switch-tab" data-tab="details">详情</button>
-            </div>
-            <div class="halo-editor-sidebar-body">
-              ${state.articleInspectorTab === "outline" ? outline : detailPanel}
-            </div>
-          </aside>
-        </div>
-        ${articleHistoryModalHtml(post)}
-      </section>`;
-  }
-
-  function syncArticleEditorChrome(root, post) {
-    if (!root || !post || state.articleMode !== "editor") return;
-
-    const saveButton = root.querySelector('.halo-article-page-actions [data-article-action="save"]');
-    const publishButton = root.querySelector('.halo-article-page-actions [data-article-action="publish"]');
-    const previewButton = root.querySelector('.halo-article-page-actions [data-article-action="toggle-preview"]');
-    const saveLabel = state.articleSavingAction === "save" ? "保存中..." : "保存";
-    const publishLabel = state.articleSavingAction === "publish" ? "发布中..." : "发布";
-    const isSaving = !!state.articleSavingAction;
-
-    if (saveButton) {
-      saveButton.textContent = saveLabel;
-      saveButton.disabled = isSaving;
-    }
-
-    if (publishButton) {
-      publishButton.textContent = publishLabel;
-      publishButton.disabled = isSaving;
-    }
-
-    if (previewButton) {
-      previewButton.textContent = state.articlePreviewMode ? "编辑" : "预览";
-    }
-
-    if (state.articleInspectorTab === "details") {
-      const sidebarBody = root.querySelector(".halo-editor-sidebar-body");
-      if (sidebarBody) {
-        sidebarBody.innerHTML = articleDetailsPanelHtml(post);
-      }
-    }
-  }
-
-  function clearSelectedArticleImage(root) {
-    root?.querySelectorAll(".halo-article-editor-canvas img.halo-selected-image").forEach((image) => {
-      image.classList.remove("halo-selected-image");
-    });
-  }
-
-  function handleArticlesWorkspaceKeydown(event) {
-    const editor = event.target.closest(".halo-article-editor-canvas");
-    if (!editor || state.articlePreviewMode) return;
-
-    if (event.key === "Backspace" || event.key === "Delete") {
-      const selectedImage = editor.querySelector("img.halo-selected-image");
-      if (selectedImage) {
-        event.preventDefault();
-        selectedImage.remove();
-        updateArticleSnapshotFromDom();
-        return;
-      }
-
-      const selection = window.getSelection();
-      if (!selection?.rangeCount) return;
-
-      const range = selection.getRangeAt(0);
-      if (!range.collapsed) {
-        const fragment = range.cloneContents();
-        if (fragment.querySelector?.("img")) {
-          event.preventDefault();
-          range.deleteContents();
-          updateArticleSnapshotFromDom();
-        }
-        return;
-      }
-
-      const imageNode =
-        range.startContainer?.nodeType === Node.ELEMENT_NODE
-          ? event.key === "Delete"
-            ? range.startContainer.childNodes[range.startOffset]
-            : range.startContainer.childNodes[range.startOffset - 1]
-          : event.key === "Delete"
-          ? range.startContainer?.nextSibling
-          : range.startContainer?.previousSibling;
-
-      if (imageNode?.nodeType === Node.ELEMENT_NODE && imageNode.tagName === "IMG") {
-        event.preventDefault();
-        imageNode.remove();
-        updateArticleSnapshotFromDom();
-      }
-    }
-  }
-
-  function handleArticlesWorkspaceClick(event) {
-    const image = event.target.closest(".halo-article-editor-canvas img");
-    if (image) {
-      const editor = image.closest(".halo-article-editor-canvas");
-      clearSelectedArticleImage(editor);
-      image.classList.add("halo-selected-image");
-      editor?.focus();
-      event.preventDefault();
-      return;
-    }
-
-    if (event.target.closest(".halo-article-editor-canvas")) {
-      clearSelectedArticleImage(event.currentTarget);
-    }
-
-    const trigger = event.target.closest("[data-article-action]");
-    if (!trigger) return;
-
-    const action = trigger.dataset.articleAction;
-    if (action === "close-history") {
-      state.articleHistoryOpen = false;
-      renderArticlesWorkspace();
-      return;
-    }
-
-    if (action === "toggle-preview") {
-      state.articlePreviewMode = !state.articlePreviewMode;
-      renderArticlesWorkspace();
-      return;
-    }
-
-    if (action === "toggle-history") {
-      const post = currentArticle();
-      state.articleHistoryOpen = !state.articleHistoryOpen;
-      if (state.articleHistoryOpen && post) {
-        void loadArticleHistory(post);
-      } else {
-        renderArticlesWorkspace();
-      }
-      return;
-    }
-
-    if (action === "open-post") {
-      setArticleMode("editor", trigger.dataset.slug || "");
-      return;
-    }
-
-    if (action === "back-list") {
-      setArticleMode("list");
-      return;
-    }
-
-    if (action === "retry") {
-      state.articleDataLoaded = false;
-      state.articleDataError = "";
-      ensureArticlesData();
-      return;
-    }
-
-    if (action === "switch-tab") {
-      state.articleInspectorTab = trigger.dataset.tab || "outline";
-      updateArticleSnapshotFromDom();
-      renderArticlesWorkspace();
-      return;
-    }
-
-    if (action === "exec") {
-      runArticleCommand(trigger.dataset.command, trigger.dataset.value || "");
-      return;
-    }
-
-    if (action === "save" || action === "publish") {
-      void saveArticleToGitHub(action);
-      return;
-    }
-
-    if (action === "new-post") {
-      const slug = `draft-${Date.now()}`;
-      const post = normalizeArticleRecord({
-        slug,
-        path: "",
-        draft: true,
-        publishDate: new Date().toISOString(),
-        updateDate: new Date().toISOString(),
-        title: "未命名文章",
-        date: new Date().toISOString(),
-        dateLabel: formatDate(new Date().toISOString()),
-        status: "草稿",
-        author: "XF",
-        tags: ["Halo"],
-        categories: ["默认分类"],
-        excerpt: "",
-        html: "<p></p>",
-        plainText: "",
-        outline: [],
-        rawBody: "",
-      });
-      state.articlePosts.unshift(post);
-      setArticleMode("editor", slug);
-      return;
-    }
-
-    if (action === "notice") {
-      state.articleNotice = trigger.dataset.notice || "功能入口已经预留好了。";
-      renderArticlesWorkspace();
-      return;
-    }
-
-    if (action === "jump-outline") {
-      const text = trigger.dataset.outlineText;
-      const heading = Array.from(
-        document.querySelectorAll(".halo-article-editor-canvas h1, .halo-article-editor-canvas h2, .halo-article-editor-canvas h3")
-      ).find((node) => node.textContent.trim() === text);
-      if (heading) heading.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
   }
 
   function ensureSidebar() {

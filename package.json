@@ -6,6 +6,8 @@
     "dev": "astro dev",
     "build": "node tools/generate-admin-articles-index.mjs && astro build",
     "preview": "node tools/generate-admin-articles-index.mjs && astro build && astro preview",
+    "sync:live-articles": "node tools/sync-live-articles.mjs",
+    "admin:local": "astro build && node tools/sync-live-articles.mjs dist/admin/articles-index.json && node tools/serve-dist.mjs 4321",
     "astro": "astro",
     "init": "esno scripts/init.ts"
   },
